@@ -4,7 +4,6 @@ import com.kauailabs.navx.frc.AHRS;
 
 import edu.wpi.first.wpilibj.SampleRobot;
 import edu.wpi.first.wpilibj.Talon;
-import edu.wpi.first.wpilibj.RobotDrive;
 import edu.wpi.first.wpilibj.SPI;
 
 import org.opencv.core.Mat;
@@ -89,6 +88,11 @@ public class Robot extends SampleRobot {
 		backLeft    = new Talon(5);
 		middleRight = new Talon(1);
 		middleLeft  = new Talon(3);
+
+		frontRight.setInverted(true);
+		backRight.setInverted(true);
+		middleRight.setInverted(true);
+
 
 		leftStick = new Joystick(0);
 		rightStick = new Joystick(1);
@@ -196,22 +200,42 @@ public class Robot extends SampleRobot {
 
 	}
 
-	public void adaptiveDrive(double l, double r){
+	public void adaptiveDrive(double l_in, double r){
+
+		SmartDashboard.putNumber("LStick", l);
+		SmartDashboard.putNumber("RStick", r);
+
 		// alpha is a parameter between 0 and 1
 		final double alpha = 0.5;
 		double c = 0.5 * (l+r);
 		double d = 0.5 * (l-r);
 		double scale = (1 - (alpha * c * c));
 		d *= scale;
-		l = c + d;
-		r = c - d;
 
-		frontRight.set(r);
-		backRight.set(r);
-		middleRight.set(r);
-		frontLeft.set(l);
-		backLeft.set(l);
-		middleLeft.set(l);
+
+		// GYRO CORRECTION -- high if d is close to zero, low otherwise
+		double gRate = ahrs.getRate();
+		final double CORR_COEFF = 0.5;
+		double corr = 0.0;
+		if (Math.abs(d) < 0.05)
+			corr = (gRate * Math.abs(c) * CORR_COEFF * (1-Math.abs(d)));
+		d -= corr;
+
+		double l_out = c + d;
+		double r_out = c - d;
+
+		SmartDashboard.putNumber("PowerVal", c);
+		SmartDashboard.putNumber("DirectionVal", d);
+		SmartDashboard.putNumber("LOut", l_out);
+		SmartDashboard.putNumber("ROut", r_out);
+		SmartDashboard.putNumber("Corr", corr);
+
+		frontRight.set(r_out);
+		backRight.set(r_out);
+		middleRight.set(r_out);
+		frontLeft.set(l_out);
+		backLeft.set(l_out);
+		middleLeft.set(l_out);
 	}
 
 	public void teleopInit() {
@@ -251,6 +275,7 @@ public class Robot extends SampleRobot {
 		SmartDashboard.putBoolean(  "IMU_Connected",        ahrs.isConnected());
 		SmartDashboard.putBoolean(  "IMU_IsCalibrating",    ahrs.isCalibrating());
 		SmartDashboard.putNumber(   "IMU_Yaw",              ahrs.getYaw());
+		SmartDashboard.putNumber(   "IMU_YawRate",          ahrs.getRate());
 		SmartDashboard.putNumber(   "IMU_Pitch",            ahrs.getPitch());
 		SmartDashboard.putNumber(   "IMU_Roll",             ahrs.getRoll());
 
@@ -338,8 +363,9 @@ public class Robot extends SampleRobot {
 		int n = 0;
 		while (isOperatorControl() && isEnabled()) {
 
+			// these need to be negated because forward on the stick is negative
 			double leftAxis = -leftStick.getY();
-			double rightAxis = rightStick.getY();
+			double rightAxis = -rightStick.getY();
 
 			scale = 0.65;
 
