@@ -30,7 +30,6 @@ import edu.wpi.first.wpilibj.vision.VisionRunner;
 import edu.wpi.first.wpilibj.vision.VisionThread;
 
 public class Robot extends SampleRobot {
-	RobotDrive myRobot;  // class that handles basic drive operations
 	Joystick leftStick;  // set to ID 1 in DriverStation
 	Joystick rightStick; // set to ID 2 in DriverStation
 	Joystick operatorStick;
@@ -90,9 +89,6 @@ public class Robot extends SampleRobot {
 		backLeft    = new Talon(5);
 		middleRight = new Talon(1);
 		middleLeft  = new Talon(3);
-
-		myRobot = new RobotDrive(frontLeft,frontRight,backRight,backLeft);
-		myRobot.setExpiration(0.1);
 
 		leftStick = new Joystick(0);
 		rightStick = new Joystick(1);
@@ -339,7 +335,6 @@ public class Robot extends SampleRobot {
 	}
 
 	public void operatorControl() {
-		myRobot.setSafetyEnabled(true);
 		int n = 0;
 		while (isOperatorControl() && isEnabled()) {
 
@@ -421,9 +416,7 @@ public class Robot extends SampleRobot {
 
 			exposureValue = (int) SmartDashboard.getNumber("Exposure", exposureValue);
 			camera.setExposureManual(exposureValue);
-			
-			System.out.println("EXP" + exposureValue);
-			
+
 			report();
 		}
 	}
