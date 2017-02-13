@@ -200,7 +200,7 @@ public class Robot extends SampleRobot {
 
 	}
 
-	public void adaptiveDrive(double l_in, double r){
+	public void adaptiveDrive(double l, double r){
 
 		SmartDashboard.putNumber("LStick", l);
 		SmartDashboard.putNumber("RStick", r);
