@@ -6,9 +6,6 @@ import edu.wpi.first.wpilibj.SampleRobot;
 import edu.wpi.first.wpilibj.Talon;
 import edu.wpi.first.wpilibj.SPI;
 
-import org.opencv.core.Mat;
-import org.opencv.imgproc.Imgproc;
-
 import com.ctre.CANTalon;
 import com.ctre.CANTalon.FeedbackDevice;
 import com.ctre.CANTalon.TalonControlMode;
@@ -17,15 +14,10 @@ import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.PowerDistributionPanel;
-//import edu.wpi.first.wpilibj.Joystick.AxisType;
-//import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
-import edu.wpi.cscore.CvSink;
-import edu.wpi.cscore.CvSource;
 import edu.wpi.cscore.UsbCamera;
 import edu.wpi.first.wpilibj.CameraServer;
 import edu.wpi.first.wpilibj.CounterBase;
-import edu.wpi.first.wpilibj.vision.VisionRunner;
 import edu.wpi.first.wpilibj.vision.VisionThread;
 
 public class Robot extends SampleRobot {
@@ -116,8 +108,6 @@ public class Robot extends SampleRobot {
 		shooter.setD(0.0);
 		shooter.changeControlMode(TalonControlMode.Speed);
 
-		// shooter.changeControlMode(TalonControlMode.PercentVbus);
-
 		pdp = new PowerDistributionPanel(); 
 	}
 
@@ -160,30 +150,6 @@ public class Robot extends SampleRobot {
 
 		current = pdp.getTotalCurrent();
 		power = pdp.getTotalPower();
-
-
-		// CameraServer.getInstance().startAutomaticCapture();
-
-		/***
-        new Thread(() -> {
-        	UsbCamera camera = CameraServer.getInstance().startAutomaticCapture();
-        	camera.setResolution(640, 480);
-        	camera.setExposureManual(10);
-
-        	CvSink cvSink = CameraServer.getInstance().getVideo();
-        	CvSource outputStream = CameraServer.getInstance().putVideo("Black and White", 640, 480);
-
-        	Mat source = new Mat();
-        	Mat output = new Mat();
-
-        	while(!Thread.interrupted()) {
-        		cvSink.grabFrame(source);
-        		Imgproc.cvtColor(source, output, Imgproc.COLOR_BGR2GRAY);
-        		outputStream.putFrame(output);
-        	}
-        }).start();
-		 ***/
-
 		
 		camera.setResolution(640, 480);
 
@@ -358,6 +324,26 @@ public class Robot extends SampleRobot {
 		directionL = encLeft.getDirection();
 		stoppedL = encLeft.getStopped();
 	}
+	
+	public double getScale() {
+		scale = 0.65;
+
+		defaultspeed = false;
+
+		if ( leftStick.getTrigger() || rightStick.getTrigger() ) {
+			scale = 0.85;
+		}
+		if (leftStick.getTrigger() && rightStick.getTrigger()) {
+			scale = 1;
+			shooter.set(0);
+			climber.set(0);
+		} 
+		if(scale == 0.65){
+			defaultspeed = true;
+		}
+		
+		return scale;
+	}
 
 	public void operatorControl() {
 		int n = 0;
@@ -367,23 +353,7 @@ public class Robot extends SampleRobot {
 			double leftAxis = -leftStick.getY();
 			double rightAxis = -rightStick.getY();
 
-			scale = 0.65;
-
-			defaultspeed = false;
-
-			if ( leftStick.getTrigger() || rightStick.getTrigger() ) {
-				scale = 0.85;
-			}
-			if (leftStick.getTrigger() && rightStick.getTrigger()) {
-				scale = 1;
-				shooter.set(0);
-				climber.set(0);
-			} 
-			if(scale == 0.65){
-				defaultspeed = true;
-			}
-
-			adaptiveDrive(leftAxis * scale, rightAxis * scale);
+			adaptiveDrive(leftAxis * getScale(), rightAxis * getScale());
 
 			double climberVal = rightStick.getX();
 			if (climberVal > 0.05 || climberVal < -0.05) {
@@ -393,21 +363,10 @@ public class Robot extends SampleRobot {
 				climber.set(0);
 			}
 
-			/*	
-        	double shooterVal = leftStick.getX();
-        	if (shooterVal > 0.05 || shooterVal < -0.05) {
-        		shooter.set(shooterVal * 7000);
-        	}
-        	else {
-        		shooter.set(0);
-        	}
-			 */	
-
 			if (leftStick.getRawButton(2)) {
 				shooter.set(shooterRPM);
 			}
-			//	else
-			//		shooter.set(0.0);
+			
 			if (n%100 == 0) {
 				if (leftStick.getRawButton(6) && (shooterRPM < 6000.0))
 					shooterRPM += 250.0;
@@ -416,29 +375,6 @@ public class Robot extends SampleRobot {
 					shooterRPM -= 500.0;
 			}
 			n++;
-
-
-			/*
-        	if (operatorStick.getRawButton(4)) {
-        		shooter.set(shooterRPM);
-        	} else {
-        		shooter.set(0);
-        	}
-        	if (operatorStick.getRawButton(1) && (shooterRPM <= 1)) {
-        		shooterRPM += 0.001;
-        		if (shooterRPM > 1) {
-        			shooterRPM -= 0.001;
-        		}
-        		System.out.println(shooterRPM);
-        	}
-        	if (operatorStick.getRawButton(2) && (shooterRPM >= 0)) {
-        		shooterRPM -= 0.001;
-        		if (shooterRPM <+ 0) {
-        			shooterRPM += 0.001;
-        		}
-        		System.out.println(shooterRPM);
-        	}
-			 */
 
 			exposureValue = (int) SmartDashboard.getNumber("Exposure", exposureValue);
 			camera.setExposureManual(exposureValue);
