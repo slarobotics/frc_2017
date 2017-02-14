@@ -7,8 +7,6 @@ import edu.wpi.first.wpilibj.Talon;
 import edu.wpi.first.wpilibj.SPI;
 
 import com.ctre.CANTalon;
-import com.ctre.CANTalon.FeedbackDevice;
-import com.ctre.CANTalon.TalonControlMode;
 
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Encoder;
@@ -18,7 +16,6 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.cscore.CvSource;
 import edu.wpi.cscore.UsbCamera;
 import edu.wpi.first.wpilibj.CameraServer;
-import edu.wpi.first.wpilibj.CounterBase;
 import edu.wpi.first.wpilibj.vision.VisionThread;
 
 public class Robot extends SampleRobot {
