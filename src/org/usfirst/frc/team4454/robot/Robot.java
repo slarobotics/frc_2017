@@ -67,6 +67,10 @@ public class Robot extends SampleRobot {
 	UsbCamera camera;
 	
 	int n = 0;
+	
+	int mode = 1;
+	int gearPosition = 1;
+	boolean teamRed = true;
 
 
 	public Robot() {
@@ -295,10 +299,6 @@ public class Robot extends SampleRobot {
 		reportSpeed();
 	}
 
-	int mode = 1;
-	int gearPosition = 1;
-	boolean teamRed = true;
-
 	public void placeAndShoot() {
 
 	}
@@ -400,7 +400,6 @@ public class Robot extends SampleRobot {
 			report();
 		}
 	}
-
 
 	public void test() {
 		while (isTest() && isEnabled()) {
