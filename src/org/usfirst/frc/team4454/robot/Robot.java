@@ -72,6 +72,8 @@ public class Robot extends SampleRobot {
 	
 	DigitalInput BallSensor = new DigitalInput(0);
 	
+	CvSource outputStream;
+	
 	int n = 0;
 	
 	int mode = 1;
@@ -146,7 +148,7 @@ public class Robot extends SampleRobot {
 			DriverStation.reportError("Error instantiating navX MXP:  " + ex.getMessage(), true);
 		}
 		
-/***
+		/***
 
 		encLeft = new Encoder(8, 9, false, CounterBase.EncodingType.k4X);
 
@@ -167,14 +169,20 @@ public class Robot extends SampleRobot {
 		current = pdp.getTotalCurrent();
 		power = pdp.getTotalPower();
 
-***/
+		 ***/
 		
 		camera.setResolution(640, 480);
 		
 		camera.setExposureManual(10);
 		
-		CvSource outputStream = CameraServer.getInstance().putVideo("hsvThreshold", 640, 480);
+		outputStream = CameraServer.getInstance().putVideo("hsvThreshold", 640, 480);
 
+		findContours();
+
+		SmartDashboard.putNumber("Exposure", exposureValue);
+	}
+	
+	public void findContours() {
 		visionThread = new VisionThread(camera, new OurVisionPipeline(), 
 				pipeline->{
 					outputStream.putFrame(pipeline.hsvThresholdOutput());
@@ -185,8 +193,6 @@ public class Robot extends SampleRobot {
 				});
 
 		visionThread.start();
-
-		SmartDashboard.putNumber("Exposure", exposureValue);
 	}
 
 	public void setDriveMotors(double l, double r) {
