@@ -62,6 +62,8 @@ public class Robot extends SampleRobot {
 
 	double current;
 	double power;
+	
+	int contours;
 
 	VisionThread visionThread;
 	int exposureValue = 10;
@@ -178,14 +180,13 @@ public class Robot extends SampleRobot {
 					outputStream.putFrame(pipeline.hsvThresholdOutput());
 
 					if (!pipeline.filterContoursOutput().isEmpty()) {
-						// System.out.println("Got contours");
+						contours += 1;
 					};					
 				});
 
 		visionThread.start();
 
 		SmartDashboard.putNumber("Exposure", exposureValue);
-
 	}
 
 	public void setDriveMotors(double l, double r) {
