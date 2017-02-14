@@ -75,6 +75,8 @@ public class Robot extends SampleRobot {
 	int mode = 1;
 	int gearPosition = 1;
 	boolean teamRed = true;
+	
+	boolean preferredRPM;
 
 	public Robot() {
 		// The code below sets up the Joysticks and talons for the drivetrain.
@@ -259,6 +261,14 @@ public class Robot extends SampleRobot {
 		SmartDashboard.putNumber("SP", shooter.getSetpoint());
 		SmartDashboard.putNumber(" S", shooter.getSpeed());
 		SmartDashboard.putNumber(" E", shooter.getError());
+		
+		if (shooterRPM == 3250) {
+			preferredRPM = true;
+		} else {
+			preferredRPM = false;
+		}
+		
+		SmartDashboard.putBoolean("Preferred RPM", preferredRPM);
 	}
 
 	public void reportAhrs() {
