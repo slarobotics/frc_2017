@@ -15,6 +15,7 @@ import edu.wpi.first.wpilibj.Encoder;
 import edu.wpi.first.wpilibj.Joystick;
 import edu.wpi.first.wpilibj.PowerDistributionPanel;
 import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
+import edu.wpi.cscore.CvSource;
 import edu.wpi.cscore.UsbCamera;
 import edu.wpi.first.wpilibj.CameraServer;
 import edu.wpi.first.wpilibj.CounterBase;
@@ -65,15 +66,17 @@ public class Robot extends SampleRobot {
 	double power;
 
 	VisionThread visionThread;
-
 	int exposureValue = 10;
-	UsbCamera camera = CameraServer.getInstance().startAutomaticCapture();
+	UsbCamera camera;
+	
+	int n = 0;
 
 
 	public Robot() {
 		// The code below sets up the Joysticks and talons for the drivetrain.
 		//(front or the back of the robot)(Right or Left of the robot)
 
+/****
 		frontRight  = new Talon(0);
 		frontLeft   = new Talon(4);
 		backRight   = new Talon(2);
@@ -86,7 +89,7 @@ public class Robot extends SampleRobot {
 		middleRight.setInverted(true);
 
 
-		leftStick = new Joystick(0);
+		leftStick  = new Joystick(0);
 		rightStick = new Joystick(1);
 		operatorStick = new Joystick(2);
 
@@ -109,6 +112,9 @@ public class Robot extends SampleRobot {
 		shooter.changeControlMode(TalonControlMode.Speed);
 
 		pdp = new PowerDistributionPanel(); 
+		
+****/
+		camera = CameraServer.getInstance().startAutomaticCapture();
 	}
 
 	@Override
@@ -131,6 +137,8 @@ public class Robot extends SampleRobot {
 		} catch (RuntimeException ex ) {
 			DriverStation.reportError("Error instantiating navX MXP:  " + ex.getMessage(), true);
 		}
+		
+/***
 
 		encLeft = new Encoder(8, 9, false, CounterBase.EncodingType.k4X);
 
@@ -150,20 +158,38 @@ public class Robot extends SampleRobot {
 
 		current = pdp.getTotalCurrent();
 		power = pdp.getTotalPower();
+
+***/
 		
 		camera.setResolution(640, 480);
+		
+		camera.setExposureManual(10);
+		
+		CvSource outputStream = CameraServer.getInstance().putVideo("hsvThreshold", 640, 480);
 
 		visionThread = new VisionThread(camera, new OurVisionPipeline(), 
 				pipeline->{
+					outputStream.putFrame(pipeline.hsvThresholdOutput());
+
 					if (!pipeline.filterContoursOutput().isEmpty()) {
-						System.out.println("Got contours");
-					}
+						// System.out.println("Got contours");
+					};					
 				});
 
 		visionThread.start();
-		
+
 		SmartDashboard.putNumber("Exposure", exposureValue);
 
+	}
+
+	public void setDriveMotors(double l, double r) {
+		frontRight.set(r);
+		backRight.set(r);
+		middleRight.set(r);
+
+		frontLeft.set(l);
+		backLeft.set(l);
+		middleLeft.set(l);
 	}
 
 	public void adaptiveDrive(double l, double r){
@@ -196,12 +222,7 @@ public class Robot extends SampleRobot {
 		SmartDashboard.putNumber("ROut", r_out);
 		SmartDashboard.putNumber("Corr", corr);
 
-		frontRight.set(r_out);
-		backRight.set(r_out);
-		middleRight.set(r_out);
-		frontLeft.set(l_out);
-		backLeft.set(l_out);
-		middleLeft.set(l_out);
+		setDriveMotors(l_out, r_out);
 	}
 
 	public void teleopInit() {
@@ -258,7 +279,7 @@ public class Robot extends SampleRobot {
 		SmartDashboard.putNumber(   "YawAxis",              yaw_axis.board_axis.getValue() );
 
 	}
-	
+
 	public void reportSpeed() {
 		SmartDashboard.putNumber("Speed", scale);
 		SmartDashboard.putBoolean("Default Speed", defaultspeed);
@@ -324,7 +345,7 @@ public class Robot extends SampleRobot {
 		directionL = encLeft.getDirection();
 		stoppedL = encLeft.getStopped();
 	}
-	
+
 	public double getScale() {
 		scale = 0.65;
 
@@ -341,11 +362,11 @@ public class Robot extends SampleRobot {
 		if(scale == 0.65){
 			defaultspeed = true;
 		}
-		
+
 		return scale;
 	}
 
-	public void operatorControl() {
+	public void operatorControl () {
 		int n = 0;
 		while (isOperatorControl() && isEnabled()) {
 
@@ -366,7 +387,7 @@ public class Robot extends SampleRobot {
 			if (leftStick.getRawButton(2)) {
 				shooter.set(shooterRPM);
 			}
-			
+
 			if (n%100 == 0) {
 				if (leftStick.getRawButton(6) && (shooterRPM < 6000.0))
 					shooterRPM += 250.0;
@@ -380,6 +401,23 @@ public class Robot extends SampleRobot {
 			camera.setExposureManual(exposureValue);
 
 			report();
+		}
+	}
+
+
+	public void test() {
+		while (isTest() && isEnabled()) {
+
+			if ((n % 100) == 0) {
+				exposureValue = (int) SmartDashboard.getNumber("Exposure", exposureValue);
+				
+				System.out.println ("exposure = " + exposureValue);
+				
+				if (exposureValue > 0) {
+					// camera.setExposureManual(exposureValue);
+				}
+			}
+			++n;
 		}
 	}
 
