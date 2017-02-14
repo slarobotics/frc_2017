@@ -16,6 +16,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.cscore.CvSource;
 import edu.wpi.cscore.UsbCamera;
 import edu.wpi.first.wpilibj.CameraServer;
+import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.vision.VisionThread;
 
 public class Robot extends SampleRobot {
@@ -64,14 +65,16 @@ public class Robot extends SampleRobot {
 
 	VisionThread visionThread;
 	int exposureValue = 10;
+	
 	UsbCamera camera;
+	
+	DigitalInput BallSensor = new DigitalInput(0);
 	
 	int n = 0;
 	
 	int mode = 1;
 	int gearPosition = 1;
 	boolean teamRed = true;
-
 
 	public Robot() {
 		// The code below sets up the Joysticks and talons for the drivetrain.
@@ -291,12 +294,17 @@ public class Robot extends SampleRobot {
 		SmartDashboard.putNumber("Power", power);
 	}
 
+	public void reportGear() {
+		SmartDashboard.putBoolean("Gear?", BallSensor.get());
+	}
+	
 	public void report() {
 		reportShooters();
 		reportAhrs();
 		updateEncoders();
 		reportEncoders();
 		reportSpeed();
+		reportGear();
 	}
 
 	public void placeAndShoot() {
