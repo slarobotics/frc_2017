@@ -7,6 +7,8 @@ import edu.wpi.first.wpilibj.Talon;
 import edu.wpi.first.wpilibj.SPI;
 
 import com.ctre.CANTalon;
+import com.ctre.CANTalon.FeedbackDevice;
+import com.ctre.CANTalon.TalonControlMode;
 
 import edu.wpi.first.wpilibj.DriverStation;
 import edu.wpi.first.wpilibj.Encoder;
@@ -16,6 +18,7 @@ import edu.wpi.first.wpilibj.smartdashboard.SmartDashboard;
 import edu.wpi.cscore.CvSource;
 import edu.wpi.cscore.UsbCamera;
 import edu.wpi.first.wpilibj.CameraServer;
+import edu.wpi.first.wpilibj.CounterBase;
 import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.vision.VisionThread;
 
@@ -86,7 +89,6 @@ public class Robot extends SampleRobot {
 		// The code below sets up the Joysticks and talons for the drivetrain.
 		//(front or the back of the robot)(Right or Left of the robot)
 
-/****
 		frontRight  = new Talon(0);
 		frontLeft   = new Talon(4);
 		backRight   = new Talon(2);
@@ -122,8 +124,7 @@ public class Robot extends SampleRobot {
 		shooter.changeControlMode(TalonControlMode.Speed);
 
 		pdp = new PowerDistributionPanel(); 
-		
-****/
+
 		camera = CameraServer.getInstance().startAutomaticCapture();
 	}
 
@@ -148,8 +149,6 @@ public class Robot extends SampleRobot {
 			DriverStation.reportError("Error instantiating navX MXP:  " + ex.getMessage(), true);
 		}
 		
-		/***
-
 		encLeft = new Encoder(8, 9, false, CounterBase.EncodingType.k4X);
 
 		encLeft.setMaxPeriod(1);
@@ -159,7 +158,6 @@ public class Robot extends SampleRobot {
 		encLeft.setSamplesToAverage(7);
 
 		encRight = new Encoder(6, 7, false, CounterBase.EncodingType.k4X);
-
 		encRight.setMaxPeriod(1);
 		encRight.setMinRate(10);
 		encRight.setDistancePerPulse(5);
@@ -168,8 +166,6 @@ public class Robot extends SampleRobot {
 
 		current = pdp.getTotalCurrent();
 		power = pdp.getTotalPower();
-
-		 ***/
 		
 		camera.setResolution(640, 480);
 		
@@ -419,9 +415,11 @@ public class Robot extends SampleRobot {
 			}
 			n++;
 
-			exposureValue = (int) SmartDashboard.getNumber("Exposure", exposureValue);
-			camera.setExposureManual(exposureValue);
-
+			int exposureValueNew = (int) SmartDashboard.getNumber("Exposure", exposureValue);
+			if(exposureValueNew != exposureValue) {
+				exposureValue = exposureValueNew;
+				camera.setExposureManual(exposureValue);
+			}
 			report();
 		}
 	}
