@@ -65,24 +65,33 @@ public class Robot extends SampleRobot {
 
 	double current;
 	double power;
-	
+
 	int contours;
 
+	UsbCamera camera;
 	VisionThread visionThread;
 	int exposureValue = 10;
-	
-	UsbCamera camera;
-	
+	boolean exposureChanged = false;
+
+	// Vision Parameters
+	double hueMin = 50;
+	double hueMax = 122;
+	double satMin = 105;
+	double satMax = 255;
+	double valMin = 50;
+	double valMax = 255;
+
+
 	DigitalInput BallSensor = new DigitalInput(0);
-	
+
 	CvSource outputStream;
-	
+
 	int n = 0;
-	
+
 	int mode = 1;
 	int gearPosition = 1;
 	boolean teamRed = true;
-	
+
 	boolean preferredRPM;
 
 	public Robot() {
@@ -148,7 +157,7 @@ public class Robot extends SampleRobot {
 		} catch (RuntimeException ex ) {
 			DriverStation.reportError("Error instantiating navX MXP:  " + ex.getMessage(), true);
 		}
-		
+
 		encLeft = new Encoder(8, 9, false, CounterBase.EncodingType.k4X);
 
 		encLeft.setMaxPeriod(1);
@@ -166,29 +175,55 @@ public class Robot extends SampleRobot {
 
 		current = pdp.getTotalCurrent();
 		power = pdp.getTotalPower();
-		
+
 		camera.setResolution(640, 480);
-		
+
 		camera.setExposureManual(10);
-		
+
 		outputStream = CameraServer.getInstance().putVideo("hsvThreshold", 640, 480);
 
-		findContours();
-
-		SmartDashboard.putNumber("Exposure", exposureValue);
-	}
-	
-	public void findContours() {
 		visionThread = new VisionThread(camera, new OurVisionPipeline(), 
 				pipeline->{
 					outputStream.putFrame(pipeline.hsvThresholdOutput());
 
 					if (!pipeline.filterContoursOutput().isEmpty()) {
 						contours += 1;
-					};					
+					};
+
+					if (exposureChanged) {
+						camera.setExposureManual(exposureValue);
+						exposureChanged = false;
+
+						System.out.println(pipeline.hsvThresholdHue[0]);
+						System.out.println(pipeline.hsvThresholdHue[1]);
+
+
+					}
+
+					/**
+					pipeline.hsvThresholdHue[0] = hueMin;
+					pipeline.hsvThresholdHue[1] = hueMax;
+
+					pipeline.hsvThresholdSaturation[0] = satMin;
+					pipeline.hsvThresholdSaturation[1] = satMax;
+
+					pipeline.hsvThresholdValue[0] = valMin;
+					pipeline.hsvThresholdValue[1] = valMax;
+					**/
+
 				});
 
 		visionThread.start();
+
+		SmartDashboard.putNumber("Exposure", exposureValue);
+
+		SmartDashboard.putNumber("hueMin", hueMin);
+		SmartDashboard.putNumber("hueMax", hueMax);
+		SmartDashboard.putNumber("satMin", satMin);
+		SmartDashboard.putNumber("satMax", satMax);
+		SmartDashboard.putNumber("valMin", valMin);
+		SmartDashboard.putNumber("valMax", valMax);
+
 	}
 
 	public void setDriveMotors(double l, double r) {
@@ -264,13 +299,13 @@ public class Robot extends SampleRobot {
 		SmartDashboard.putNumber("SP", shooter.getSetpoint());
 		SmartDashboard.putNumber(" S", shooter.getSpeed());
 		SmartDashboard.putNumber(" E", shooter.getError());
-		
+
 		if (shooterRPM == 3250) {
 			preferredRPM = true;
 		} else {
 			preferredRPM = false;
 		}
-		
+
 		SmartDashboard.putBoolean("Preferred RPM", preferredRPM);
 	}
 
@@ -310,7 +345,7 @@ public class Robot extends SampleRobot {
 	public void reportGear() {
 		SmartDashboard.putBoolean("Gear?", BallSensor.get());
 	}
-	
+
 	public void report() {
 		reportShooters();
 		reportAhrs();
@@ -385,59 +420,62 @@ public class Robot extends SampleRobot {
 	}
 
 	public void operatorControl () {
-		int n = 0;
 		while (isOperatorControl() && isEnabled()) {
 
-			// these need to be negated because forward on the stick is negative
-			double leftAxis = -leftStick.getY();
-			double rightAxis = -rightStick.getY();
+			// Removing code that checks joysticks and motors
+			if (false) {
 
-			adaptiveDrive(leftAxis * getScale(), rightAxis * getScale());
+				// these need to be negated because forward on the stick is negative
+				double leftAxis = -leftStick.getY();
+				double rightAxis = -rightStick.getY();
 
-			double climberVal = rightStick.getX();
-			if (climberVal > 0.05 || climberVal < -0.05) {
-				climber.set(climberVal * 7000);
+				adaptiveDrive(leftAxis * getScale(), rightAxis * getScale());
+
+				double climberVal = rightStick.getX();
+				if (climberVal > 0.05 || climberVal < -0.05) {
+					climber.set(climberVal * 7000);
+				}
+				else {
+					climber.set(0);
+				}
+
+				if (leftStick.getRawButton(2)) {
+					shooter.set(shooterRPM);
+				}
+
+				if (n%100 == 0) {
+					if (leftStick.getRawButton(6) && (shooterRPM < 6000.0))
+						shooterRPM += 250.0;
+
+					if (leftStick.getRawButton(7) && (shooterRPM >= 0.0))
+						shooterRPM -= 500.0;
+				}
+
+
+				report();
 			}
-			else {
-				climber.set(0);
-			}
 
-			if (leftStick.getRawButton(2)) {
-				shooter.set(shooterRPM);
-			}
 
-			if (n%100 == 0) {
-				if (leftStick.getRawButton(6) && (shooterRPM < 6000.0))
-					shooterRPM += 250.0;
+		}
 
-				if (leftStick.getRawButton(7) && (shooterRPM >= 0.0))
-					shooterRPM -= 500.0;
-			}
-			n++;
 
+		if ( true ) {
 			int exposureValueNew = (int) SmartDashboard.getNumber("Exposure", exposureValue);
 			if(exposureValueNew != exposureValue) {
 				exposureValue = exposureValueNew;
-				camera.setExposureManual(exposureValue);
+				exposureChanged = true;
+				// camera.setExposureManual(exposureValue);
 			}
-			report();
-		}
-	}
 
-	public void test() {
-		while (isTest() && isEnabled()) {
-
-			if ((n % 100) == 0) {
-				exposureValue = (int) SmartDashboard.getNumber("Exposure", exposureValue);
-				
-				System.out.println ("exposure = " + exposureValue);
-				
-				if (exposureValue > 0) {
-					// camera.setExposureManual(exposureValue);
-				}
-			}
-			++n;
+			hueMin = SmartDashboard.getNumber("hueMin", hueMin);
+			hueMax = SmartDashboard.getNumber("hueMax", hueMax);
+			satMin = SmartDashboard.getNumber("satMin", satMin);
+			satMax = SmartDashboard.getNumber("satMax", satMax);
+			valMin = SmartDashboard.getNumber("valMin", valMin);
+			valMax = SmartDashboard.getNumber("valMax", valMax);
 		}
+
+		n++;
 	}
 
 }
