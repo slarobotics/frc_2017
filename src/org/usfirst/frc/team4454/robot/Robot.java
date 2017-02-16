@@ -1,3 +1,11 @@
+/*
+ * Team 4454 FRC 2017 FIRST STEAMWORKS
+ * 
+ * http://slarobotics.org
+ * 
+ */
+
+
 package org.usfirst.frc.team4454.robot;
 
 import com.kauailabs.navx.frc.AHRS;
@@ -239,6 +247,10 @@ public class Robot extends SampleRobot {
 		middleLeft.set(l);
 	}
 
+	public void singleSpeedDrive(double s) {
+		adaptiveDrive(s, s);
+	}
+	
 	public void adaptiveDrive(double l, double r){
 
 		SmartDashboard.putNumber("LStick", l);
