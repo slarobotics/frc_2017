@@ -83,8 +83,7 @@ public class Robot extends SampleRobot {
 	double valMin = 50;
 	double valMax = 255;
 
-
-	DigitalInput BallSensor = new DigitalInput(0);
+	DigitalInput GearSensor = new DigitalInput(0);
 
 	CvSource outputStream;
 
@@ -347,7 +346,7 @@ public class Robot extends SampleRobot {
 	}
 
 	public void reportGear() {
-		SmartDashboard.putBoolean("Gear?", BallSensor.get());
+		SmartDashboard.putBoolean("Gear?", GearSensor.get());
 	}
 
 	public void report() {
@@ -442,6 +441,7 @@ public class Robot extends SampleRobot {
 		}
 	}
 
+	@Override
 	public void operatorControl () {
 		while (isOperatorControl() && isEnabled()) {
 
