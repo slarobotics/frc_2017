@@ -35,6 +35,7 @@ public class Robot extends SampleRobot {
 	Talon middleLeft;
 	CANTalon shooter;
 	CANTalon climber;
+	CANTalon intake;
 
 	AHRS ahrs;
 
@@ -47,7 +48,8 @@ public class Robot extends SampleRobot {
 	boolean defaultspeed;
 
 	double shooterRPM = 0.0;
-	double climberRPM = 0.0;
+	//double climberRPM = 0.0;
+	//double intakeRPM = 0.0;
 
 	int countR;
 	double rawDistanceR;
@@ -115,7 +117,9 @@ public class Robot extends SampleRobot {
 		operatorStick = new Joystick(2);
 
 		shooter = new CANTalon(9);
+		//Double check these numbers.
 		climber = new CANTalon(10);
+		intake = new CANTalon(11);
 
 		shooter.setFeedbackDevice(FeedbackDevice.CtreMagEncoder_Relative);
 
@@ -411,6 +415,7 @@ public class Robot extends SampleRobot {
 			scale = 1;
 			shooter.set(0);
 			climber.set(0);
+			intake.set(0);
 		} 
 		if(scale == 0.65){
 			defaultspeed = true;
@@ -423,7 +428,6 @@ public class Robot extends SampleRobot {
 		while (isOperatorControl() && isEnabled()) {
 
 			// Removing code that checks joysticks and motors
-			if (false) {
 
 				// these need to be negated because forward on the stick is negative
 				double leftAxis = -leftStick.getY();
@@ -437,6 +441,14 @@ public class Robot extends SampleRobot {
 				}
 				else {
 					climber.set(0);
+				}
+				
+				double intakeVal = leftStick.getX();
+				if (intakeVal > 0.05 || intakeVal < -0.05) {
+					intake.set(intakeVal * 7000);
+				}
+				else {
+					intake.set(0);
 				}
 
 				if (leftStick.getRawButton(2)) {
@@ -456,10 +468,6 @@ public class Robot extends SampleRobot {
 			}
 
 
-		}
-
-
-		if ( true ) {
 			int exposureValueNew = (int) SmartDashboard.getNumber("Exposure", exposureValue);
 			if(exposureValueNew != exposureValue) {
 				exposureValue = exposureValueNew;
@@ -473,7 +481,6 @@ public class Robot extends SampleRobot {
 			satMax = SmartDashboard.getNumber("satMax", satMax);
 			valMin = SmartDashboard.getNumber("valMin", valMin);
 			valMax = SmartDashboard.getNumber("valMax", valMax);
-		}
 
 		n++;
 	}
