@@ -427,8 +427,6 @@ public class Robot extends SampleRobot {
 	public void operatorControl () {
 		while (isOperatorControl() && isEnabled()) {
 
-			// Removing code that checks joysticks and motors
-
 				// these need to be negated because forward on the stick is negative
 				double leftAxis = -leftStick.getY();
 				double rightAxis = -rightStick.getY();
