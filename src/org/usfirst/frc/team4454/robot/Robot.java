@@ -448,8 +448,10 @@ public class Robot extends SampleRobot {
 				// these need to be negated because forward on the stick is negative
 				double leftAxis = -leftStick.getY();
 				double rightAxis = -rightStick.getY();
+				
+				double scale = getScale();
 
-				adaptiveDrive(leftAxis * getScale(), rightAxis * getScale());
+				adaptiveDrive(leftAxis * scale, rightAxis * scale);
 
 				setClimberMotors(rightStick.getX());
 
