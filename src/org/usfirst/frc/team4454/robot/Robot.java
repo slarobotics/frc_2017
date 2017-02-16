@@ -2,7 +2,6 @@
  * Team 4454 FRC 2017 FIRST STEAMWORKS
  * 
  * http://slarobotics.org
- * 
  */
 
 
@@ -56,8 +55,6 @@ public class Robot extends SampleRobot {
 	boolean defaultspeed;
 
 	double shooterRPM = 0.0;
-	//double climberRPM = 0.0;
-	//double intakeRPM = 0.0;
 
 	int countR;
 	double rawDistanceR;
