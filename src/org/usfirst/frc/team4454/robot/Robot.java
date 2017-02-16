@@ -423,6 +423,24 @@ public class Robot extends SampleRobot {
 
 		return scale;
 	}
+	
+	public void setClimberMotors(double climberVal) {
+		if (climberVal > 0.05 || climberVal < -0.05) {
+			climber.set(climberVal * 7000);
+		}
+		else {
+			climber.set(0);
+		}
+	}
+	
+	public void setIntakeMotors(double intakeVal) {
+		if (intakeVal > 0.05 || intakeVal < -0.05) {
+			intake.set(intakeVal * 7000);
+		}
+		else {
+			intake.set(0);
+		}
+	}
 
 	public void operatorControl () {
 		while (isOperatorControl() && isEnabled()) {
@@ -433,21 +451,9 @@ public class Robot extends SampleRobot {
 
 				adaptiveDrive(leftAxis * getScale(), rightAxis * getScale());
 
-				double climberVal = rightStick.getX();
-				if (climberVal > 0.05 || climberVal < -0.05) {
-					climber.set(climberVal * 7000);
-				}
-				else {
-					climber.set(0);
-				}
-				
-				double intakeVal = leftStick.getX();
-				if (intakeVal > 0.05 || intakeVal < -0.05) {
-					intake.set(intakeVal * 7000);
-				}
-				else {
-					intake.set(0);
-				}
+				setClimberMotors(rightStick.getX());
+
+				setIntakeMotors(leftStick.getX());
 
 				if (leftStick.getRawButton(2)) {
 					shooter.set(shooterRPM);
