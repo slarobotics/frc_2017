@@ -9,8 +9,9 @@ package org.usfirst.frc.team4454.robot;
 
 import com.kauailabs.navx.frc.AHRS;
 
-import edu.wpi.first.wpilibj.SampleRobot;
+import edu.wpi.first.wpilibj.IterativeRobot;
 import edu.wpi.first.wpilibj.Talon;
+import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.SPI;
 
 import com.ctre.CANTalon;
@@ -29,25 +30,24 @@ import edu.wpi.first.wpilibj.CounterBase;
 import edu.wpi.first.wpilibj.DigitalInput;
 import edu.wpi.first.wpilibj.vision.VisionThread;
 
-public class Robot extends SampleRobot {
+public class Robot extends IterativeRobot {
+	
 	Joystick leftStick;  // set to ID 1 in DriverStation
 	Joystick rightStick; // set to ID 2 in DriverStation
 	Joystick operatorStick;
 
-	Talon frontRight;
-	Talon frontLeft;
-	Talon backRight;
-	Talon backLeft;
-	Talon middleRight;
-	Talon middleLeft;
+	CANTalon frontRight;
+	CANTalon frontLeft;
+	CANTalon backRight;
+	CANTalon backLeft;
+	CANTalon middleRight;
+	CANTalon middleLeft;
+	
 	CANTalon shooter;
 	CANTalon climber;
 	CANTalon intake;
 
 	AHRS ahrs;
-
-	Encoder encLeft;
-	Encoder encRight;
 
 	PowerDistributionPanel pdp;
 
@@ -56,6 +56,9 @@ public class Robot extends SampleRobot {
 
 	double shooterRPM = 0.0;
 
+	Encoder encLeft;
+	Encoder encRight;
+	
 	int countR;
 	double rawDistanceR;
 	double distanceR;
@@ -70,13 +73,12 @@ public class Robot extends SampleRobot {
 	boolean directionL;
 	boolean stoppedL;
 
-	double current;
-	double power;
 
-	int contours;
-
+	// VISION DATA STRUCTURES
 	UsbCamera camera;
 	VisionThread visionThread;
+	CvSource outputStream;
+	
 	int exposureValue = 10;
 	boolean exposureChanged = false;
 
@@ -88,28 +90,24 @@ public class Robot extends SampleRobot {
 	double valMin = 50;
 	double valMax = 255;
 
+
 	DigitalInput GearSensor = new DigitalInput(0);
 
-	CvSource outputStream;
+	boolean preferredRPM;	
 
 	int n = 0;
 
-	int mode = 1;
-	int gearPosition = 1;
-	boolean teamRed = true;
-
-	boolean preferredRPM;
 
 	public Robot() {
 		// The code below sets up the Joysticks and talons for the drivetrain.
 		//(front or the back of the robot)(Right or Left of the robot)
 
-		frontRight  = new Talon(0);
-		frontLeft   = new Talon(4);
-		backRight   = new Talon(2);
-		backLeft    = new Talon(5);
-		middleRight = new Talon(1);
-		middleLeft  = new Talon(3);
+		frontRight  = new CANTalon(0);
+		frontLeft   = new CANTalon(4);
+		backRight   = new CANTalon(2);
+		backLeft    = new CANTalon(5);
+		middleRight = new CANTalon(1);
+		middleLeft  = new CANTalon(3);
 
 		frontRight.setInverted(true);
 		backRight.setInverted(true);
@@ -181,8 +179,6 @@ public class Robot extends SampleRobot {
 		encRight.setReverseDirection(false);
 		encRight.setSamplesToAverage(7);
 
-		current = pdp.getTotalCurrent();
-		power = pdp.getTotalPower();
 
 		camera.setResolution(640, 480);
 
@@ -195,7 +191,6 @@ public class Robot extends SampleRobot {
 					outputStream.putFrame(pipeline.hsvThresholdOutput());
 
 					if (!pipeline.filterContoursOutput().isEmpty()) {
-						contours += 1;
 					};
 
 					if (exposureChanged) {
@@ -204,11 +199,8 @@ public class Robot extends SampleRobot {
 
 						System.out.println(pipeline.hsvThresholdHue[0]);
 						System.out.println(pipeline.hsvThresholdHue[1]);
-
-
 					}
 
-					/**
 					pipeline.hsvThresholdHue[0] = hueMin;
 					pipeline.hsvThresholdHue[1] = hueMax;
 
@@ -217,7 +209,6 @@ public class Robot extends SampleRobot {
 
 					pipeline.hsvThresholdValue[0] = valMin;
 					pipeline.hsvThresholdValue[1] = valMax;
-					**/
 
 				});
 
@@ -233,6 +224,82 @@ public class Robot extends SampleRobot {
 		SmartDashboard.putNumber("valMax", valMax);
 
 	}
+	
+	// TELEOP MODE
+
+	@Override
+	public void teleopInit() {
+		ahrs.zeroYaw();
+	}
+	
+	@Override
+	public void teleopPeriodic () {
+	}
+	
+
+	public void operatorControl () {
+		while (isOperatorControl() && isEnabled()) {
+			
+			/****
+
+			// these need to be negated because forward on the stick is negative
+			double leftAxis = -leftStick.getY();
+			double rightAxis = -rightStick.getY();
+
+			double scale = getScale();
+
+			adaptiveDrive(leftAxis * scale, rightAxis * scale);
+
+			setClimberMotors(rightStick.getX());
+
+			setIntakeMotors(leftStick.getX());
+
+			if (leftStick.getRawButton(2)) {
+				shooter.set(shooterRPM);
+			}
+
+			if (n%100 == 0) {
+				if (leftStick.getRawButton(6) && (shooterRPM < 6000.0))
+					shooterRPM += 250.0;
+
+				if (leftStick.getRawButton(7) && (shooterRPM >= 0.0))
+					shooterRPM -= 500.0;
+			}
+
+			report();
+
+			 ****/
+
+			int exposureValueNew = (int) SmartDashboard.getNumber("Exposure", exposureValue);
+			if(exposureValueNew != exposureValue) {
+				exposureValue = exposureValueNew;
+				exposureChanged = true;
+			}
+
+			hueMin = SmartDashboard.getNumber("hueMin", hueMin);
+			hueMax = SmartDashboard.getNumber("hueMax", hueMax);
+			satMin = SmartDashboard.getNumber("satMin", satMin);
+			satMax = SmartDashboard.getNumber("satMax", satMax);
+			valMin = SmartDashboard.getNumber("valMin", valMin);
+			valMax = SmartDashboard.getNumber("valMax", valMax);
+			
+			Timer.delay(0.005);
+
+		}
+
+	}
+	// AUTONOMOUS MODE
+	
+	@Override
+	public void autonomousInit() {
+		ahrs.zeroYaw();
+	}
+
+	@Override
+	public void autonomousPeriodic() {
+	}
+
+	// UTILITY METHODS
 
 	public void setDriveMotors(double l, double r) {
 		frontRight.set(r);
@@ -247,7 +314,7 @@ public class Robot extends SampleRobot {
 	public void singleSpeedDrive(double s) {
 		adaptiveDrive(s, s);
 	}
-	
+
 	public void adaptiveDrive(double l, double r){
 
 		SmartDashboard.putNumber("LStick", l);
@@ -281,15 +348,8 @@ public class Robot extends SampleRobot {
 		setDriveMotors(l_out, r_out);
 	}
 
-	public void teleopInit() {
-		ahrs.zeroYaw();
-	}
-
-	public void autonomousInit() {
-		ahrs.zeroYaw();
-	}
-
-	public void reportEncoders() {
+	
+ 	public void reportEncoders() {
 		SmartDashboard.putNumber("Left Count", countL);
 		SmartDashboard.putNumber("Left Raw Distance", rawDistanceL);
 		SmartDashboard.putNumber("Left Distance", distanceL);
@@ -350,12 +410,11 @@ public class Robot extends SampleRobot {
 	}
 
 	public void reportPower() {
+		double current = pdp.getTotalCurrent();
+		double power = pdp.getTotalPower();
+		
 		SmartDashboard.putNumber("Current", current);
 		SmartDashboard.putNumber("Power", power);
-	}
-
-	public void reportGear() {
-		SmartDashboard.putBoolean("Gear?", GearSensor.get());
 	}
 
 	public void report() {
@@ -364,7 +423,6 @@ public class Robot extends SampleRobot {
 		updateEncoders();
 		reportEncoders();
 		reportSpeed();
-		reportGear();
 	}
 
 	public void placeAndShoot() {
@@ -381,18 +439,6 @@ public class Robot extends SampleRobot {
 
 	public void moveForward() {
 		adaptiveDrive(0.65, 0.65);
-	}
-
-	public void autonomousPeriodic() {
-		while (isAutonomous() && isEnabled()) {
-			switch(mode) {
-			case 1: placeAndShoot(); break;
-			case 2: placeAndCross(); break;
-			case 3: hoppers(); break;
-			case 4: moveForward(); break;
-			default: break;
-			}
-		}
 	}
 
 	public void updateEncoders() {
@@ -431,7 +477,7 @@ public class Robot extends SampleRobot {
 
 		return scale;
 	}
-	
+
 	public void setClimberMotors(double climberVal) {
 		if (climberVal > 0.05 || climberVal < -0.05) {
 			climber.set(climberVal * 7000);
@@ -440,7 +486,7 @@ public class Robot extends SampleRobot {
 			climber.set(0);
 		}
 	}
-	
+
 	public void setIntakeMotors(double intakeVal) {
 		if (intakeVal > 0.05 || intakeVal < -0.05) {
 			intake.set(intakeVal * 7000);
@@ -450,53 +496,5 @@ public class Robot extends SampleRobot {
 		}
 	}
 
-	public void operatorControl () {
-		while (isOperatorControl() && isEnabled()) {
-
-				// these need to be negated because forward on the stick is negative
-				double leftAxis = -leftStick.getY();
-				double rightAxis = -rightStick.getY();
-				
-				double scale = getScale();
-
-				adaptiveDrive(leftAxis * scale, rightAxis * scale);
-
-				setClimberMotors(rightStick.getX());
-
-				setIntakeMotors(leftStick.getX());
-
-				if (leftStick.getRawButton(2)) {
-					shooter.set(shooterRPM);
-				}
-
-				if (n%100 == 0) {
-					if (leftStick.getRawButton(6) && (shooterRPM < 6000.0))
-						shooterRPM += 250.0;
-
-					if (leftStick.getRawButton(7) && (shooterRPM >= 0.0))
-						shooterRPM -= 500.0;
-				}
-
-
-				report();
-			}
-
-
-			int exposureValueNew = (int) SmartDashboard.getNumber("Exposure", exposureValue);
-			if(exposureValueNew != exposureValue) {
-				exposureValue = exposureValueNew;
-				exposureChanged = true;
-				// camera.setExposureManual(exposureValue);
-			}
-
-			hueMin = SmartDashboard.getNumber("hueMin", hueMin);
-			hueMax = SmartDashboard.getNumber("hueMax", hueMax);
-			satMin = SmartDashboard.getNumber("satMin", satMin);
-			satMax = SmartDashboard.getNumber("satMax", satMax);
-			valMin = SmartDashboard.getNumber("valMin", valMin);
-			valMax = SmartDashboard.getNumber("valMax", valMax);
-
-		n++;
-	}
 
 }

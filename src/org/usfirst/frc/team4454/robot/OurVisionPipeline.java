@@ -61,9 +61,9 @@ public class OurVisionPipeline implements VisionPipeline {
 		Mat hsvThresholdInput = source0;
 		
 		hsvThreshold(hsvThresholdInput, hsvThresholdHue, hsvThresholdSaturation, hsvThresholdValue, hsvThresholdOutput);
-
+ 
 		// Step Find_Contours0:
-		Mat findContoursInput = hsvThresholdOutput;
+		Mat findContoursInput = hsvThresholdOutput.clone();
 		boolean findContoursExternalOnly = false;
 		findContours(findContoursInput, findContoursExternalOnly, findContoursOutput);
 
@@ -75,6 +75,7 @@ public class OurVisionPipeline implements VisionPipeline {
 				filterContoursMaxWidth, filterContoursMinHeight, filterContoursMaxHeight, filterContoursSolidity, 
 				filterContoursMaxVertices, filterContoursMinVertices, filterContoursMinRatio, filterContoursMaxRatio, 
 				filterContoursOutput);
+		
 	}
 
 	/**
@@ -125,8 +126,7 @@ public class OurVisionPipeline implements VisionPipeline {
 	 * @param maskSize the size of the mask.
 	 * @param output The image in which to store the output.
 	 */
-	private void findContours(Mat input, boolean externalOnly,
-		List<MatOfPoint> contours) {
+	private void findContours(Mat input, boolean externalOnly, List<MatOfPoint> contours) {
 		Mat hierarchy = new Mat();
 		contours.clear();
 		int mode;
