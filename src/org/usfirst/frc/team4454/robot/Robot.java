@@ -10,8 +10,6 @@ package org.usfirst.frc.team4454.robot;
 import com.kauailabs.navx.frc.AHRS;
 
 import edu.wpi.first.wpilibj.IterativeRobot;
-import edu.wpi.first.wpilibj.Talon;
-import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.SPI;
 
 import com.ctre.CANTalon;
@@ -102,12 +100,16 @@ public class Robot extends IterativeRobot {
 		// The code below sets up the Joysticks and talons for the drivetrain.
 		//(front or the back of the robot)(Right or Left of the robot)
 
-		frontRight  = new CANTalon(0);
-		frontLeft   = new CANTalon(4);
-		backRight   = new CANTalon(2);
-		backLeft    = new CANTalon(5);
-		middleRight = new CANTalon(1);
-		middleLeft  = new CANTalon(3);
+		// left CAN IDs:
+		// right CAN IDs: 4, 5, 6
+		// shooter CAN ID: 7
+		frontLeft   = new CANTalon(1);
+		middleLeft  = new CANTalon(2);
+		backLeft    = new CANTalon(3);
+
+		frontRight  = new CANTalon(4);
+		middleRight = new CANTalon(5);
+		backRight   = new CANTalon(6);
 
 		frontRight.setInverted(true);
 		backRight.setInverted(true);
@@ -118,14 +120,14 @@ public class Robot extends IterativeRobot {
 		rightStick = new Joystick(1);
 		operatorStick = new Joystick(2);
 
-		shooter = new CANTalon(9);
+		shooter = new CANTalon(7);
 		//Double check these numbers.
 		climber = new CANTalon(10);
 		intake = new CANTalon(11);
 
 		shooter.setFeedbackDevice(FeedbackDevice.CtreMagEncoder_Relative);
 
-		shooter.reverseSensor(false);
+		shooter.reverseSensor(true);
 		shooter.reverseOutput(true);
 
 		shooter.configNominalOutputVoltage(0.0f, -0.0f);
@@ -234,60 +236,57 @@ public class Robot extends IterativeRobot {
 	
 	@Override
 	public void teleopPeriodic () {
+		// these need to be negated because forward on the stick is negative
+		double leftAxis = -leftStick.getY();
+		double rightAxis = -rightStick.getY();
+
+		double scale = getDrivePowerScale();
+
+		adaptiveDrive(leftAxis * scale, rightAxis * scale);
+		//setClimberMotors(rightStick.getX());
+		
+		if (operatorStick.getRawButton(4)) {
+			setIntakeMotors(1.0);
+		} else if (operatorStick.getRawButton(2)) {
+			setIntakeMotors(-1.0);
+		} else {
+			setIntakeMotors(0);
+		}
+
+		if (operatorStick.getRawButton(1)) {
+			shooter.set(shooterRPM);
+		} else {
+			shooter.set(0);
+		}
+
+		if (n%20 == 0) {
+			if (operatorStick.getRawButton(5) && (shooterRPM < 6000.0))
+				shooterRPM += 250.0;
+
+			if (operatorStick.getRawButton(6) && (shooterRPM >= 0.0))
+				shooterRPM -= 250.0;
+		}
+
+		report();
+		n++;
+
+		/*
+		int exposureValueNew = (int) SmartDashboard.getNumber("Exposure", exposureValue);
+		if(exposureValueNew != exposureValue) {
+			exposureValue = exposureValueNew;
+			exposureChanged = true;
+		}
+
+		hueMin = SmartDashboard.getNumber("hueMin", hueMin);
+		hueMax = SmartDashboard.getNumber("hueMax", hueMax);
+		satMin = SmartDashboard.getNumber("satMin", satMin);
+		satMax = SmartDashboard.getNumber("satMax", satMax);
+		valMin = SmartDashboard.getNumber("valMin", valMin);
+		valMax = SmartDashboard.getNumber("valMax", valMax);
+		 */
 	}
 	
 
-	public void operatorControl () {
-		while (isOperatorControl() && isEnabled()) {
-			
-			/****
-
-			// these need to be negated because forward on the stick is negative
-			double leftAxis = -leftStick.getY();
-			double rightAxis = -rightStick.getY();
-
-			double scale = getScale();
-
-			adaptiveDrive(leftAxis * scale, rightAxis * scale);
-
-			setClimberMotors(rightStick.getX());
-
-			setIntakeMotors(leftStick.getX());
-
-			if (leftStick.getRawButton(2)) {
-				shooter.set(shooterRPM);
-			}
-
-			if (n%100 == 0) {
-				if (leftStick.getRawButton(6) && (shooterRPM < 6000.0))
-					shooterRPM += 250.0;
-
-				if (leftStick.getRawButton(7) && (shooterRPM >= 0.0))
-					shooterRPM -= 500.0;
-			}
-
-			report();
-
-			 ****/
-
-			int exposureValueNew = (int) SmartDashboard.getNumber("Exposure", exposureValue);
-			if(exposureValueNew != exposureValue) {
-				exposureValue = exposureValueNew;
-				exposureChanged = true;
-			}
-
-			hueMin = SmartDashboard.getNumber("hueMin", hueMin);
-			hueMax = SmartDashboard.getNumber("hueMax", hueMax);
-			satMin = SmartDashboard.getNumber("satMin", satMin);
-			satMax = SmartDashboard.getNumber("satMax", satMax);
-			valMin = SmartDashboard.getNumber("valMin", valMin);
-			valMax = SmartDashboard.getNumber("valMax", valMax);
-			
-			Timer.delay(0.005);
-
-		}
-
-	}
 	// AUTONOMOUS MODE
 	
 	@Override
@@ -348,7 +347,27 @@ public class Robot extends IterativeRobot {
 		setDriveMotors(l_out, r_out);
 	}
 
-	
+	public double getDrivePowerScale() {
+		scale = 0.65;
+
+		defaultspeed = false;
+
+		if ( leftStick.getTrigger() || rightStick.getTrigger() ) {
+			scale = 0.85;
+		}
+		if (leftStick.getTrigger() && rightStick.getTrigger()) {
+			scale = 1;
+			shooter.set(0);
+			climber.set(0);
+			intake.set(0);
+		} 
+		if(scale == 0.65){
+			defaultspeed = true;
+		}
+
+		return scale;
+	}
+
  	public void reportEncoders() {
 		SmartDashboard.putNumber("Left Count", countL);
 		SmartDashboard.putNumber("Left Raw Distance", rawDistanceL);
@@ -455,27 +474,6 @@ public class Robot extends IterativeRobot {
 		rateL = encLeft.getRate();
 		directionL = encLeft.getDirection();
 		stoppedL = encLeft.getStopped();
-	}
-
-	public double getScale() {
-		scale = 0.65;
-
-		defaultspeed = false;
-
-		if ( leftStick.getTrigger() || rightStick.getTrigger() ) {
-			scale = 0.85;
-		}
-		if (leftStick.getTrigger() && rightStick.getTrigger()) {
-			scale = 1;
-			shooter.set(0);
-			climber.set(0);
-			intake.set(0);
-		} 
-		if(scale == 0.65){
-			defaultspeed = true;
-		}
-
-		return scale;
 	}
 
 	public void setClimberMotors(double climberVal) {
