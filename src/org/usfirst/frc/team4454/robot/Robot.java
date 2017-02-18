@@ -259,12 +259,12 @@ public class Robot extends IterativeRobot {
 			shooter.set(0);
 		}
 
-		if (n%20 == 0) {
-			if (operatorStick.getRawButton(5) && (shooterRPM < 6000.0))
-				shooterRPM += 250.0;
+		if (n%10 == 0) {
+			if (operatorStick.getRawButton(6) && (shooterRPM < 6000.0))
+				shooterRPM += 100.0;
 
-			if (operatorStick.getRawButton(6) && (shooterRPM >= 0.0))
-				shooterRPM -= 250.0;
+			if (operatorStick.getRawButton(5) && (shooterRPM >= 0.0))
+				shooterRPM -= 100.0;
 		}
 
 		report();
