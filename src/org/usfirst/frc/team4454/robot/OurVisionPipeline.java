@@ -49,6 +49,8 @@ public class OurVisionPipeline implements VisionPipeline {
 	private ArrayList<MatOfPoint> findContoursOutput = new ArrayList<MatOfPoint>();
 	private ArrayList<MatOfPoint> filterContoursOutput = new ArrayList<MatOfPoint>();
 
+	private boolean running = true;
+	
 	static {
 		System.loadLibrary(Core.NATIVE_LIBRARY_NAME);
 	}
@@ -57,11 +59,20 @@ public class OurVisionPipeline implements VisionPipeline {
 	 * This is the primary method that runs the entire pipeline and updates the outputs.
 	 */
 	public void process(Mat source0) {
+		if(running == false) {
+			try {
+				System.out.println("Waiting for thread to be continued");
+				wait();
+			} catch (InterruptedException e) {
+				e.printStackTrace();
+			}
+		}
 		// Step HSV_Threshold0:
 		Mat hsvThresholdInput = source0;
 		
 		hsvThreshold(hsvThresholdInput, hsvThresholdHue, hsvThresholdSaturation, hsvThresholdValue, hsvThresholdOutput);
  
+		// Note that the openCV routines
 		// Step Find_Contours0:
 		Mat findContoursInput = hsvThresholdOutput.clone();
 		boolean findContoursExternalOnly = false;
@@ -188,4 +199,5 @@ public class OurVisionPipeline implements VisionPipeline {
 			output.add(contour);
 		}
 	}
+
 }

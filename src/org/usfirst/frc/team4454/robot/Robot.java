@@ -73,7 +73,7 @@ public class Robot extends IterativeRobot {
 
 
 	// VISION DATA STRUCTURES
-	UsbCamera camera;
+	UsbCamera shooterCamera, intakeCamera;
 	VisionThread visionThread;
 	CvSource outputStream;
 	
@@ -87,6 +87,11 @@ public class Robot extends IterativeRobot {
 	double satMax = 255;
 	double valMin = 50;
 	double valMax = 255;
+	
+	double F = 0.027;
+	double P = 0.05;
+	double I = 0.00001;
+	double D = 0.0;
 
 
 	DigitalInput GearSensor = new DigitalInput(0);
@@ -94,6 +99,9 @@ public class Robot extends IterativeRobot {
 	boolean preferredRPM;	
 
 	int n = 0;
+	
+	public enum AutonMode { DRIVE_STRAIGHT_1, TURN_1, FINISHED };
+	AutonMode currentAutonMode = AutonMode.FINISHED;
 
 
 	public Robot() {
@@ -134,15 +142,20 @@ public class Robot extends IterativeRobot {
 		shooter.configPeakOutputVoltage(12.0f, -12.0f);
 
 		shooter.setProfile(0);
-		shooter.setF(0);
-		shooter.setP(.05);
-		shooter.setI(.0001);
-		shooter.setD(0.0);
+		shooter.setF(F);
+		shooter.setP(P);
+		shooter.setI(I);
+		shooter.setD(D);
 		shooter.changeControlMode(TalonControlMode.Speed);
 
 		pdp = new PowerDistributionPanel(); 
 
-		camera = CameraServer.getInstance().startAutomaticCapture();
+		// camera paths:
+		//    top USB: /dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.1:1.0-video-index0
+		// bottom USB: /dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.2:1.0-video-index0
+
+		shooterCamera = CameraServer.getInstance().startAutomaticCapture("shooter", "/dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.1:1.0-video-index0");
+		intakeCamera = CameraServer.getInstance().startAutomaticCapture("intake", "/dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.2:1.0-video-index0");
 	}
 
 	@Override
@@ -169,26 +182,32 @@ public class Robot extends IterativeRobot {
 		encLeft = new Encoder(8, 9, false, CounterBase.EncodingType.k4X);
 
 		encLeft.setMaxPeriod(1);
-		encLeft.setMinRate(10);
-		encLeft.setDistancePerPulse(5);
-		encLeft.setReverseDirection(true);
+		encLeft.setMinRate(0.1);
+		encLeft.setDistancePerPulse(1.0/((4.0 * 25.4 / .001) * Math.PI / 360.0));
+		encLeft.setReverseDirection(false);
 		encLeft.setSamplesToAverage(7);
 
 		encRight = new Encoder(6, 7, false, CounterBase.EncodingType.k4X);
+		
 		encRight.setMaxPeriod(1);
-		encRight.setMinRate(10);
-		encRight.setDistancePerPulse(5);
+		encRight.setMinRate(0.1);
+		encRight.setDistancePerPulse(1.0/((4.0 * 25.4 / .001) * Math.PI / 360.0));
 		encRight.setReverseDirection(false);
 		encRight.setSamplesToAverage(7);
 
 
-		camera.setResolution(640, 480);
+		shooterCamera.setResolution(320, 240);
+		intakeCamera.setResolution(320, 240);
 
-		camera.setExposureManual(10);
+		shooterCamera.setExposureAuto();
+		intakeCamera.setExposureAuto();
 
-		outputStream = CameraServer.getInstance().putVideo("hsvThreshold", 640, 480);
+//		shooterCamera.setExposureManual(10);
+//		intakeCamera.setExposureManual(10);
 
-		visionThread = new VisionThread(camera, new OurVisionPipeline(), 
+		outputStream = CameraServer.getInstance().putVideo("hsvThreshold", 320, 240);
+
+		visionThread = new VisionThread(shooterCamera, new OurVisionPipeline(),
 				pipeline->{
 					outputStream.putFrame(pipeline.hsvThresholdOutput());
 
@@ -196,11 +215,8 @@ public class Robot extends IterativeRobot {
 					};
 
 					if (exposureChanged) {
-						camera.setExposureManual(exposureValue);
+//						shooterCamera.setExposureManual(exposureValue);
 						exposureChanged = false;
-
-						System.out.println(pipeline.hsvThresholdHue[0]);
-						System.out.println(pipeline.hsvThresholdHue[1]);
 					}
 
 					pipeline.hsvThresholdHue[0] = hueMin;
@@ -216,6 +232,7 @@ public class Robot extends IterativeRobot {
 
 		visionThread.start();
 
+		
 		SmartDashboard.putNumber("Exposure", exposureValue);
 
 		SmartDashboard.putNumber("hueMin", hueMin);
@@ -224,6 +241,11 @@ public class Robot extends IterativeRobot {
 		SmartDashboard.putNumber("satMax", satMax);
 		SmartDashboard.putNumber("valMin", valMin);
 		SmartDashboard.putNumber("valMax", valMax);
+
+		SmartDashboard.putNumber("F", F);
+		SmartDashboard.putNumber("P", P);
+		SmartDashboard.putNumber("I", I);
+		SmartDashboard.putNumber("D", D);
 
 	}
 	
@@ -252,7 +274,7 @@ public class Robot extends IterativeRobot {
 		} else {
 			setIntakeMotors(0);
 		}
-
+		
 		if (operatorStick.getRawButton(1)) {
 			shooter.set(shooterRPM);
 		} else {
@@ -269,7 +291,30 @@ public class Robot extends IterativeRobot {
 
 		report();
 		n++;
-
+		double newF = SmartDashboard.getNumber("F", F);
+		if(!compareDoubles(newF, F)) {
+			F = newF;
+			shooter.setF(F);
+			System.out.format("Updating F to %f\n", F);
+		}
+		double newP = SmartDashboard.getNumber("P", P);
+		if(newP != P) {
+			P = newP;
+			shooter.setP(P);
+			System.out.format("Updating P to %f\n", P);
+		}
+		double newI = SmartDashboard.getNumber("I", I);
+		if(!compareDoubles(newI, I)) {
+			I = newI;
+			shooter.setI(I);
+			System.out.format("Updating I to %f\n", I);
+		}
+		double newD = SmartDashboard.getNumber("D", D);
+		if(!compareDoubles(newD, D)) {
+			D = newD;
+			System.out.format("Updating D to %f\n", D);
+			shooter.setD(D);
+		}
 		/*
 		int exposureValueNew = (int) SmartDashboard.getNumber("Exposure", exposureValue);
 		if(exposureValueNew != exposureValue) {
@@ -284,6 +329,10 @@ public class Robot extends IterativeRobot {
 		valMin = SmartDashboard.getNumber("valMin", valMin);
 		valMax = SmartDashboard.getNumber("valMax", valMax);
 		 */
+		
+		if(leftStick.getRawButton(9)) {
+			
+		}
 	}
 	
 
@@ -291,11 +340,47 @@ public class Robot extends IterativeRobot {
 	
 	@Override
 	public void autonomousInit() {
-		ahrs.zeroYaw();
+		resetDistanceAndYaw();
+		currentAutonMode = AutonMode.DRIVE_STRAIGHT_1;
 	}
 
 	@Override
 	public void autonomousPeriodic() {
+
+		switch (currentAutonMode) {
+
+			case DRIVE_STRAIGHT_1 :
+				// Adaptive Drive corrects for yaw drift
+				driveStraight(0.2);
+				if (encRight.getDistance() > 3.0) {
+					resetDistanceAndYaw ();
+					currentAutonMode = AutonMode.TURN_1;
+				}
+				break;
+	
+			case TURN_1 :
+				adaptiveDrive(0.1, -0.1);
+				if (ahrs.getAngle() > 90.0) {
+					resetDistanceAndYaw ();
+					currentAutonMode = AutonMode.FINISHED;
+				}
+				break;
+	
+			case FINISHED :
+				setDriveMotors (0.0, 0.0);
+				break;
+		}
+		
+		// Report current mode on dashboard
+		SmartDashboard.putString ("currentAutonMode", currentAutonMode.toString());
+		
+		report();
+	}
+
+	void resetDistanceAndYaw () {
+		ahrs.zeroYaw();
+		encLeft.reset();
+		encRight.reset();
 	}
 
 	// UTILITY METHODS
@@ -309,11 +394,7 @@ public class Robot extends IterativeRobot {
 		backLeft.set(l);
 		middleLeft.set(l);
 	}
-
-	public void singleSpeedDrive(double s) {
-		adaptiveDrive(s, s);
-	}
-
+	
 	public void adaptiveDrive(double l, double r){
 
 		SmartDashboard.putNumber("LStick", l);
@@ -346,7 +427,13 @@ public class Robot extends IterativeRobot {
 
 		setDriveMotors(l_out, r_out);
 	}
-
+	
+	// driveStraight implements a simple proportional controller designed to regulate the yaw angle to zero
+	public void driveStraight (double c) {
+		double d = -0.01 * ahrs.getAngle();
+		setDriveMotors (c+d, c-d);
+	}
+	
 	public double getDrivePowerScale() {
 		scale = 0.65;
 
@@ -444,22 +531,6 @@ public class Robot extends IterativeRobot {
 		reportSpeed();
 	}
 
-	public void placeAndShoot() {
-
-	}
-
-	public void placeAndCross() {
-
-	}
-
-	public void hoppers() {
-
-	}
-
-	public void moveForward() {
-		adaptiveDrive(0.65, 0.65);
-	}
-
 	public void updateEncoders() {
 		countR = encRight.get();
 		rawDistanceR = encRight.getRaw();
@@ -493,6 +564,10 @@ public class Robot extends IterativeRobot {
 			intake.set(0);
 		}
 	}
-
+	
+	public static boolean compareDoubles(double expected, double actual)
+	{
+		return Math.abs(expected-actual) < 5 * Math.ulp(expected);
+	}
 
 }
