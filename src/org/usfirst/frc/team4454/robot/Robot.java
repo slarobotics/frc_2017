@@ -259,21 +259,15 @@ public class Robot extends IterativeRobot {
 	@Override
 	public void teleopPeriodic () {
 		// these need to be negated because forward on the stick is negative
-		double leftAxis = -leftStick.getY();
+		double leftAxis  = -leftStick.getY();
 		double rightAxis = -rightStick.getY();
 
 		double scale = getDrivePowerScale();
-
 		adaptiveDrive(leftAxis * scale, rightAxis * scale);
-		//setClimberMotors(rightStick.getX());
 		
-		if (operatorStick.getRawButton(4)) {
-			setIntakeMotors(1.0);
-		} else if (operatorStick.getRawButton(2)) {
-			setIntakeMotors(-1.0);
-		} else {
-			setIntakeMotors(0);
-		}
+		climber.set(operatorStick.getRawAxis(1)); // Left X of Joystick
+		
+		intake.set(operatorStick.getRawAxis(3)); // Right X of Joystick
 		
 		if (operatorStick.getRawButton(1)) {
 			shooter.set(shooterRPM);
@@ -282,6 +276,12 @@ public class Robot extends IterativeRobot {
 		}
 
 		if (n%10 == 0) {
+			if (operatorStick.getRawButton(7) && (shooterRPM < 6000.0))
+				shooterRPM += 500.0;
+
+			if (operatorStick.getRawButton(8) && (shooterRPM >= 0.0))
+				shooterRPM -= 500.0;
+			
 			if (operatorStick.getRawButton(6) && (shooterRPM < 6000.0))
 				shooterRPM += 100.0;
 
@@ -295,24 +295,20 @@ public class Robot extends IterativeRobot {
 		if(!compareDoubles(newF, F)) {
 			F = newF;
 			shooter.setF(F);
-			System.out.format("Updating F to %f\n", F);
 		}
 		double newP = SmartDashboard.getNumber("P", P);
 		if(newP != P) {
 			P = newP;
 			shooter.setP(P);
-			System.out.format("Updating P to %f\n", P);
 		}
 		double newI = SmartDashboard.getNumber("I", I);
 		if(!compareDoubles(newI, I)) {
 			I = newI;
 			shooter.setI(I);
-			System.out.format("Updating I to %f\n", I);
 		}
 		double newD = SmartDashboard.getNumber("D", D);
 		if(!compareDoubles(newD, D)) {
 			D = newD;
-			System.out.format("Updating D to %f\n", D);
 			shooter.setD(D);
 		}
 		/*
@@ -359,7 +355,7 @@ public class Robot extends IterativeRobot {
 				break;
 	
 			case TURN_1 :
-				adaptiveDrive(0.1, -0.1);
+				setDriveMotors(0.1, -0.1);
 				if (ahrs.getAngle() > 90.0) {
 					resetDistanceAndYaw ();
 					currentAutonMode = AutonMode.FINISHED;
@@ -545,24 +541,6 @@ public class Robot extends IterativeRobot {
 		rateL = encLeft.getRate();
 		directionL = encLeft.getDirection();
 		stoppedL = encLeft.getStopped();
-	}
-
-	public void setClimberMotors(double climberVal) {
-		if (climberVal > 0.05 || climberVal < -0.05) {
-			climber.set(climberVal * 7000);
-		}
-		else {
-			climber.set(0);
-		}
-	}
-
-	public void setIntakeMotors(double intakeVal) {
-		if (intakeVal > 0.05 || intakeVal < -0.05) {
-			intake.set(intakeVal * 7000);
-		}
-		else {
-			intake.set(0);
-		}
 	}
 	
 	public static boolean compareDoubles(double expected, double actual)
