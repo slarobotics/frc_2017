@@ -11,6 +11,7 @@ import com.kauailabs.navx.frc.AHRS;
 
 import edu.wpi.first.wpilibj.IterativeRobot;
 import edu.wpi.first.wpilibj.SPI;
+import edu.wpi.first.wpilibj.Spark;
 
 import com.ctre.CANTalon;
 import com.ctre.CANTalon.FeedbackDevice;
@@ -44,6 +45,8 @@ public class Robot extends IterativeRobot {
 	CANTalon shooter;
 	CANTalon climber;
 	CANTalon intake;
+	
+	Spark intakeLED;
 
 	AHRS ahrs;
 
@@ -73,7 +76,8 @@ public class Robot extends IterativeRobot {
 
 
 	// VISION DATA STRUCTURES
-	UsbCamera shooterCamera, intakeCamera;
+	//UsbCamera shooterCamera;
+	UsbCamera intakeCamera;
 	VisionThread visionThread;
 	CvSource outputStream;
 	
@@ -100,9 +104,15 @@ public class Robot extends IterativeRobot {
 
 	int n = 0;
 	
-	public enum AutonMode { DRIVE_STRAIGHT_1, TURN_1, FINISHED };
+	public enum AutonMode { DRIVE_STRAIGHT_1, TURN_1, BACKUP, FINISHED, SHOOT };
+	public enum AutonGoal {PLACE_GEAR, Shoot_All, Empty_Hoppers, Simple};
+	public enum Alliance {Red,Blue};
+	public enum fieldPosition {A,B,C,D,E,F,G};
 	AutonMode currentAutonMode = AutonMode.FINISHED;
-
+	AutonGoal currentAutonGoal = AutonGoal.PLACE_GEAR;
+	Alliance currentAlliance = Alliance.Red;
+	fieldPosition currentFieldPosition = fieldPosition.A;
+	boolean autoModeButtonDown = false;
 
 	public Robot() {
 		// The code below sets up the Joysticks and talons for the drivetrain.
@@ -111,6 +121,8 @@ public class Robot extends IterativeRobot {
 		// left CAN IDs:
 		// right CAN IDs: 4, 5, 6
 		// shooter CAN ID: 7
+		// intake CAN ID: 8
+		// climber CAN ID: 9
 		frontLeft   = new CANTalon(1);
 		middleLeft  = new CANTalon(2);
 		backLeft    = new CANTalon(3);
@@ -129,9 +141,8 @@ public class Robot extends IterativeRobot {
 		operatorStick = new Joystick(2);
 
 		shooter = new CANTalon(7);
-		//Double check these numbers.
-		climber = new CANTalon(10);
-		intake = new CANTalon(11);
+		intake  = new CANTalon(8);
+		climber = new CANTalon(9);
 
 		shooter.setFeedbackDevice(FeedbackDevice.CtreMagEncoder_Relative);
 
@@ -140,6 +151,8 @@ public class Robot extends IterativeRobot {
 
 		shooter.configNominalOutputVoltage(0.0f, -0.0f);
 		shooter.configPeakOutputVoltage(12.0f, -12.0f);
+		
+		shooter.enableBrakeMode(false);
 
 		shooter.setProfile(0);
 		shooter.setF(F);
@@ -147,6 +160,8 @@ public class Robot extends IterativeRobot {
 		shooter.setI(I);
 		shooter.setD(D);
 		shooter.changeControlMode(TalonControlMode.Speed);
+		
+		
 
 		pdp = new PowerDistributionPanel(); 
 
@@ -154,7 +169,9 @@ public class Robot extends IterativeRobot {
 		//    top USB: /dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.1:1.0-video-index0
 		// bottom USB: /dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.2:1.0-video-index0
 
-		shooterCamera = CameraServer.getInstance().startAutomaticCapture("shooter", "/dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.1:1.0-video-index0");
+		intakeLED = new Spark(9);
+
+		//shooterCamera = CameraServer.getInstance().startAutomaticCapture("shooter", "/dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.1:1.0-video-index0");
 		intakeCamera = CameraServer.getInstance().startAutomaticCapture("intake", "/dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.2:1.0-video-index0");
 	}
 
@@ -196,27 +213,28 @@ public class Robot extends IterativeRobot {
 		encRight.setSamplesToAverage(7);
 
 
-		shooterCamera.setResolution(320, 240);
+		//shooterCamera.setResolution(320, 240);
 		intakeCamera.setResolution(320, 240);
 
-		shooterCamera.setExposureAuto();
-		intakeCamera.setExposureAuto();
+		// shooterCamera.setExposureAuto();
+		// intakeCamera.setExposureAuto();
 
 //		shooterCamera.setExposureManual(10);
 //		intakeCamera.setExposureManual(10);
 
 		outputStream = CameraServer.getInstance().putVideo("hsvThreshold", 320, 240);
 
-		visionThread = new VisionThread(shooterCamera, new OurVisionPipeline(),
+		visionThread = new VisionThread(intakeCamera, new OurVisionPipeline(),
 				pipeline->{
 					outputStream.putFrame(pipeline.hsvThresholdOutput());
 
-					if (!pipeline.filterContoursOutput().isEmpty()) {
-					};
-
+					if (pipeline.foundTarget) {
+					 // System.out.println("Found a target!!");
+					}
+					
 					if (exposureChanged) {
-//						shooterCamera.setExposureManual(exposureValue);
-						exposureChanged = false;
+						intakeCamera.setExposureManual(exposureValue);
+						exposureChanged = false;						
 					}
 
 					pipeline.hsvThresholdHue[0] = hueMin;
@@ -255,7 +273,7 @@ public class Robot extends IterativeRobot {
 	public void teleopInit() {
 		ahrs.zeroYaw();
 	}
-	
+
 	@Override
 	public void teleopPeriodic () {
 		// these need to be negated because forward on the stick is negative
@@ -267,13 +285,15 @@ public class Robot extends IterativeRobot {
 		
 		climber.set(operatorStick.getRawAxis(1)); // Left X of Joystick
 		
-		intake.set(operatorStick.getRawAxis(3)); // Right X of Joystick
+		intake.set(operatorStick.getRawAxis(5)); // Right X of Joystick
 		
 		if (operatorStick.getRawButton(1)) {
 			shooter.set(shooterRPM);
 		} else {
 			shooter.set(0);
 		}
+		
+		intakeLED.set(operatorStick.getRawAxis(2));
 
 		if (n%10 == 0) {
 			if (operatorStick.getRawButton(7) && (shooterRPM < 6000.0))
@@ -311,7 +331,7 @@ public class Robot extends IterativeRobot {
 			D = newD;
 			shooter.setD(D);
 		}
-		/*
+		
 		int exposureValueNew = (int) SmartDashboard.getNumber("Exposure", exposureValue);
 		if(exposureValueNew != exposureValue) {
 			exposureValue = exposureValueNew;
@@ -324,11 +344,8 @@ public class Robot extends IterativeRobot {
 		satMax = SmartDashboard.getNumber("satMax", satMax);
 		valMin = SmartDashboard.getNumber("valMin", valMin);
 		valMax = SmartDashboard.getNumber("valMax", valMax);
-		 */
 		
-		if(leftStick.getRawButton(9)) {
-			
-		}
+		
 	}
 	
 
@@ -337,7 +354,9 @@ public class Robot extends IterativeRobot {
 	@Override
 	public void autonomousInit() {
 		resetDistanceAndYaw();
+		currentAutonGoal = AutonGoal.PLACE_GEAR;
 		currentAutonMode = AutonMode.DRIVE_STRAIGHT_1;
+			
 	}
 
 	@Override
@@ -348,7 +367,15 @@ public class Robot extends IterativeRobot {
 			case DRIVE_STRAIGHT_1 :
 				// Adaptive Drive corrects for yaw drift
 				driveStraight(0.2);
-				if (encRight.getDistance() > 3.0) {
+				if(currentAutonGoal == AutonGoal.PLACE_GEAR){
+					if (encRight.getDistance() > 2.4){
+						System.out.println(encRight.getDistance());
+						//pause needed maybe?
+						resetDistanceAndYaw();
+						currentAutonMode = AutonMode.BACKUP;
+					}
+				}
+				else if (encRight.getDistance() > 3.0) {
 					resetDistanceAndYaw ();
 					currentAutonMode = AutonMode.TURN_1;
 				}
@@ -361,7 +388,18 @@ public class Robot extends IterativeRobot {
 					currentAutonMode = AutonMode.FINISHED;
 				}
 				break;
-	
+			case BACKUP:
+				driveStraight(-0.1);
+				if (encRight.getDistance() < -1){
+					System.out.println(encRight.getDistance());
+					//pause needed maybe?
+					resetDistanceAndYaw();
+					currentAutonMode = AutonMode.FINISHED;
+				}
+			case SHOOT :
+				shooterRPM = 3500;
+				shooter.set(shooterRPM);
+				currentAutonMode = AutonMode.FINISHED;
 			case FINISHED :
 				setDriveMotors (0.0, 0.0);
 				break;
@@ -402,7 +440,6 @@ public class Robot extends IterativeRobot {
 		double d = 0.5 * (l-r);
 		double scale = (1 - (alpha * c * c));
 		d *= scale;
-
 
 		// GYRO CORRECTION -- high if d is close to zero, low otherwise
 		double gRate = ahrs.getRate();
@@ -547,5 +584,29 @@ public class Robot extends IterativeRobot {
 	{
 		return Math.abs(expected-actual) < 5 * Math.ulp(expected);
 	}
+	
+	//select-able Auton
+	boolean CheckAutonButton () {
+		boolean lastValue = autoModeButtonDown;
+		autoModeButtonDown = operatorStick.getRawButton(4);
+		return (autoModeButtonDown && !lastValue);
+	}
+	public void disabledPeriodic(){
+		int idx;
+		
+		if (CheckAutonButton()) {	
+			// Get current index
+			idx = currentAutonGoal.ordinal();
+			
+			// Get index of next choice with wraparound
+			idx = (idx + 1) % (AutonGoal.values().length);
+			
+			currentAutonGoal = AutonGoal.values()[idx];
+			currentAutonMode = AutonMode.DRIVE_STRAIGHT_1;
+		}
+
+		SmartDashboard.putString("Auto Routine", currentAutonGoal.name());
+	}
+
 
 }

@@ -1,13 +1,9 @@
 package org.usfirst.frc.team4454.robot;
 
-// import java.io.File;
-// import java.io.FileWriter;
-// import java.io.IOException;
+
+import java.lang.Math;
 import java.util.ArrayList;
 import java.util.List;
-// import java.util.Map;
-// import java.util.stream.Collectors;
-// import java.util.HashMap;
 
 import edu.wpi.first.wpilibj.vision.VisionPipeline;
 
@@ -20,34 +16,31 @@ import org.opencv.imgproc.*;
 
 
 public class OurVisionPipeline implements VisionPipeline {
-	
+
 	// Process Parameters
-	/**
-	double[] hsvThresholdHue = {49.640287512497935, 121.63822525597271};
-	double[] hsvThresholdSaturation = {105.48560877712511, 255.0};
-	double[] hsvThresholdValue = {50.44963810083678, 255.0};
-	**/
-	
 	double[] hsvThresholdHue = {0.0, 255.0};
 	double[] hsvThresholdSaturation = {0.0, 255.0};
 	double[] hsvThresholdValue = {0.0, 255.0};
-	
+
 	double filterContoursMinArea = 40.0;
 	double filterContoursMinPerimeter = 0;
-	double filterContoursMinWidth = 0;
+	double filterContoursMinWidth = 10;
 	double filterContoursMaxWidth = 1000;
-	double filterContoursMinHeight = 0;
+	double filterContoursMinHeight = 10;
 	double filterContoursMaxHeight = 1000;
 	double[] filterContoursSolidity = {0, 100};
 	double filterContoursMaxVertices = 1000000;
 	double filterContoursMinVertices = 0;
-	double filterContoursMinRatio = 0;
-	double filterContoursMaxRatio = 1000;
+	double filterContoursMinRatio = 0.3;
+	double filterContoursMaxRatio = 0.5;
 
 	//Outputs
 	private Mat hsvThresholdOutput = new Mat();
 	private ArrayList<MatOfPoint> findContoursOutput = new ArrayList<MatOfPoint>();
 	private ArrayList<MatOfPoint> filterContoursOutput = new ArrayList<MatOfPoint>();
+
+	public boolean foundTarget = false; // indicate whether you found the target
+	int targetTop, targetBottom, targetLeft, targetRight;
 
 
 	static {
@@ -60,24 +53,25 @@ public class OurVisionPipeline implements VisionPipeline {
 	public void process(Mat source0) {
 		// Step HSV_Threshold0:
 		Mat hsvThresholdInput = source0;
-		
+
 		hsvThreshold(hsvThresholdInput, hsvThresholdHue, hsvThresholdSaturation, hsvThresholdValue, hsvThresholdOutput);
- 
+
 		// Note that the openCV routines
 		// Step Find_Contours0:
 		Mat findContoursInput = hsvThresholdOutput.clone();
 		boolean findContoursExternalOnly = false;
 		findContours(findContoursInput, findContoursExternalOnly, findContoursOutput);
-
+		findContoursInput.release();
 		// Step Filter_Contours0:
 		ArrayList<MatOfPoint> filterContoursContours = findContoursOutput;
-		
+
 		filterContours(filterContoursContours, 
 				filterContoursMinArea, filterContoursMinPerimeter, filterContoursMinWidth, 
 				filterContoursMaxWidth, filterContoursMinHeight, filterContoursMaxHeight, filterContoursSolidity, 
 				filterContoursMaxVertices, filterContoursMinVertices, filterContoursMinRatio, filterContoursMaxRatio, 
 				filterContoursOutput);
-		
+
+		findTarget(filterContoursOutput);
 	}
 
 	/**
@@ -115,10 +109,10 @@ public class OurVisionPipeline implements VisionPipeline {
 	 * @param output The image in which to store the output.
 	 */
 	private void hsvThreshold(Mat input, double[] hue, double[] sat, double[] val,
-	    Mat out) {
+			Mat out) {
 		Imgproc.cvtColor(input, out, Imgproc.COLOR_BGR2HSV);
 		Core.inRange(out, new Scalar(hue[0], sat[0], val[0]),
-			new Scalar(hue[1], sat[1], val[1]), out);
+				new Scalar(hue[1], sat[1], val[1]), out);
 	}
 
 	/**
@@ -160,10 +154,10 @@ public class OurVisionPipeline implements VisionPipeline {
 	 * @param maxRatio maximum ratio of width to height
 	 */
 	private void filterContours(List<MatOfPoint> inputContours, double minArea,
-		double minPerimeter, double minWidth, double maxWidth, double minHeight, double
-		maxHeight, double[] solidity, double maxVertexCount, double minVertexCount, double
-		minRatio, double maxRatio, List<MatOfPoint> output) {
-		final MatOfInt hull = new MatOfInt();
+			double minPerimeter, double minWidth, double maxWidth, double minHeight, double
+			maxHeight, double[] solidity, double maxVertexCount, double minVertexCount, double
+			minRatio, double maxRatio, List<MatOfPoint> output) {
+		// final MatOfInt hull = new MatOfInt();
 		output.clear();
 		//operation
 		for (int i = 0; i < inputContours.size(); i++) {
@@ -171,6 +165,8 @@ public class OurVisionPipeline implements VisionPipeline {
 			final Rect bb = Imgproc.boundingRect(contour);
 			if (bb.width < minWidth || bb.width > maxWidth) continue;
 			if (bb.height < minHeight || bb.height > maxHeight) continue;
+
+			/***
 			final double area = Imgproc.contourArea(contour);
 			if (area < minArea) continue;
 			if (Imgproc.arcLength(new MatOfPoint2f(contour.toArray()), true) < minPerimeter) continue;
@@ -185,10 +181,54 @@ public class OurVisionPipeline implements VisionPipeline {
 			final double solid = 100 * area / Imgproc.contourArea(mopHull);
 			if (solid < solidity[0] || solid > solidity[1]) continue;
 			if (contour.rows() < minVertexCount || contour.rows() > maxVertexCount)	continue;
+			 ***/
+
 			final double ratio = bb.width / (double)bb.height;
 			if (ratio < minRatio || ratio > maxRatio) continue;
 			output.add(contour);
 		}
 	}
 
+	private void findTarget (List<MatOfPoint> inputContours) {
+		int n = inputContours.size();
+		int i, j;
+		Rect r1, r2;
+		double aspectRatio;
+
+		foundTarget = false;
+
+		if (n >= 2) {
+			for (i = 0; i < n; ++i) {
+				r1 = Imgproc.boundingRect(inputContours.get(i));
+
+				for (j = i+1; j < n; ++j) {
+					r2 = Imgproc.boundingRect(inputContours.get(j));
+
+					// Check that r1 and r2 have similar start rows and sizes
+					//if ( (Math.abs(r1.y - r2.y) < 10) && 
+					//		(Math.abs(r1.height - r2.height) < 10) &&
+					//		(Math.abs(r1.width - r2.width) < 10) ) {
+
+					targetTop    = Math.min(r1.y, r2.y);
+					targetBottom = Math.max(r1.y+r1.height, r2.y+r2.height);
+
+					targetLeft  = Math.min(r1.x, r2.x);
+					targetRight = Math.max(r1.x+r1.width, r2.x+r2.width);
+
+					aspectRatio = ((double)(targetBottom - targetTop)) / ((double)(targetRight - targetLeft));
+
+					if (Math.abs(aspectRatio - (5.0/10.25)) < 0.1) {
+						foundTarget = true;
+
+						Imgproc.rectangle(hsvThresholdOutput, 
+								new Point(targetLeft, targetTop), 
+								new Point(targetRight, targetBottom), 
+								new Scalar(255, 0, 0));
+						return;
+					}
+					//}
+				}
+			}
+		}
+	}
 }
