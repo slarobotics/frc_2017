@@ -11,7 +11,8 @@ import com.kauailabs.navx.frc.AHRS;
 
 import edu.wpi.first.wpilibj.IterativeRobot;
 import edu.wpi.first.wpilibj.SPI;
-import edu.wpi.first.wpilibj.Spark;
+import edu.wpi.first.wpilibj.Servo;
+import edu.wpi.first.wpilibj.Victor;
 
 import com.ctre.CANTalon;
 import com.ctre.CANTalon.FeedbackDevice;
@@ -46,7 +47,9 @@ public class Robot extends IterativeRobot {
 	CANTalon climber;
 	CANTalon intake;
 	
-	Spark intakeLED;
+	Servo intakeFeed;
+	
+	Victor intakeLED;
 
 	AHRS ahrs;
 
@@ -76,7 +79,7 @@ public class Robot extends IterativeRobot {
 
 
 	// VISION DATA STRUCTURES
-	//UsbCamera shooterCamera;
+	UsbCamera shooterCamera;
 	UsbCamera intakeCamera;
 	VisionThread visionThread;
 	CvSource outputStream;
@@ -107,11 +110,13 @@ public class Robot extends IterativeRobot {
 	public enum AutonMode { DRIVE_STRAIGHT_1, TURN_1, BACKUP, FINISHED, SHOOT };
 	public enum AutonGoal {PLACE_GEAR, Shoot_All, Empty_Hoppers, Simple};
 	public enum Alliance {Red,Blue};
-	public enum fieldPosition {A,B,C,D,E,F,G};
+	public enum fieldPosition {A,B,C,D,E,F,G, Default};
+	
 	AutonMode currentAutonMode = AutonMode.FINISHED;
 	AutonGoal currentAutonGoal = AutonGoal.PLACE_GEAR;
 	Alliance currentAlliance = Alliance.Red;
-	fieldPosition currentFieldPosition = fieldPosition.A;
+	fieldPosition currentFieldPosition = fieldPosition.D;
+	
 	boolean autoModeButtonDown = false;
 
 	public Robot() {
@@ -143,6 +148,8 @@ public class Robot extends IterativeRobot {
 		shooter = new CANTalon(7);
 		intake  = new CANTalon(8);
 		climber = new CANTalon(9);
+		
+		intakeFeed = new Servo(4);
 
 		shooter.setFeedbackDevice(FeedbackDevice.CtreMagEncoder_Relative);
 
@@ -161,17 +168,15 @@ public class Robot extends IterativeRobot {
 		shooter.setD(D);
 		shooter.changeControlMode(TalonControlMode.Speed);
 		
-		
-
 		pdp = new PowerDistributionPanel(); 
 
 		// camera paths:
 		//    top USB: /dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.1:1.0-video-index0
 		// bottom USB: /dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.2:1.0-video-index0
 
-		intakeLED = new Spark(9);
+		intakeLED = new Victor(9);
 
-		//shooterCamera = CameraServer.getInstance().startAutomaticCapture("shooter", "/dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.1:1.0-video-index0");
+		shooterCamera = CameraServer.getInstance().startAutomaticCapture("shooter", "/dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.1:1.0-video-index0");
 		intakeCamera = CameraServer.getInstance().startAutomaticCapture("intake", "/dev/v4l/by-path/platform-ci_hdrc.0-usb-0:1.2:1.0-video-index0");
 	}
 
@@ -212,15 +217,9 @@ public class Robot extends IterativeRobot {
 		encRight.setReverseDirection(false);
 		encRight.setSamplesToAverage(7);
 
-
-		//shooterCamera.setResolution(320, 240);
+		
+		shooterCamera.setResolution(320, 240);
 		intakeCamera.setResolution(320, 240);
-
-		// shooterCamera.setExposureAuto();
-		// intakeCamera.setExposureAuto();
-
-//		shooterCamera.setExposureManual(10);
-//		intakeCamera.setExposureManual(10);
 
 		outputStream = CameraServer.getInstance().putVideo("hsvThreshold", 320, 240);
 
@@ -272,13 +271,18 @@ public class Robot extends IterativeRobot {
 	@Override
 	public void teleopInit() {
 		ahrs.zeroYaw();
+		intakeCamera.setExposureAuto();
+		shooterCamera.setExposureAuto();
 	}
 
+	boolean increaseRPM = false;
+	boolean decreaseRPM = false;
 	@Override
 	public void teleopPeriodic () {
 		// these need to be negated because forward on the stick is negative
 		double leftAxis  = -leftStick.getY();
 		double rightAxis = -rightStick.getY();
+		boolean button;
 
 		double scale = getDrivePowerScale();
 		adaptiveDrive(leftAxis * scale, rightAxis * scale);
@@ -294,10 +298,25 @@ public class Robot extends IterativeRobot {
 		}
 		
 		intakeLED.set(operatorStick.getRawAxis(2));
-
+		
+		button = operatorStick.getRawButton(5);
+		if ( ( !increaseRPM && button ) || (increaseRPM && (n%10 == 0)) ) {
+			if(shooterRPM < 6000) shooterRPM += 100;
+			n = 0;
+		}
+		increaseRPM = button;
+		
+		button = operatorStick.getRawButton(6);
+		if ( ( !decreaseRPM && button ) || (decreaseRPM && (n%10 == 0)) ) {
+			if (shooterRPM > 0) shooterRPM -= 100;
+			n = 0;
+		}
+		decreaseRPM = button;
+		
+		++n;
+		
+		/***
 		if (n%10 == 0) {
-			if (operatorStick.getRawButton(7) && (shooterRPM < 6000.0))
-				shooterRPM += 500.0;
 
 			if (operatorStick.getRawButton(8) && (shooterRPM >= 0.0))
 				shooterRPM -= 500.0;
@@ -308,9 +327,17 @@ public class Robot extends IterativeRobot {
 			if (operatorStick.getRawButton(5) && (shooterRPM >= 0.0))
 				shooterRPM -= 100.0;
 		}
+		***/
+		
+		if(operatorStick.getRawButton(9)) {
+			intakeFeed.set(0.0);
+		}
+		else if(operatorStick.getRawButton(10)) {
+			intakeFeed.set(1.0);
+		}
 
 		report();
-		n++;
+
 		double newF = SmartDashboard.getNumber("F", F);
 		if(!compareDoubles(newF, F)) {
 			F = newF;
@@ -345,9 +372,29 @@ public class Robot extends IterativeRobot {
 		valMin = SmartDashboard.getNumber("valMin", valMin);
 		valMax = SmartDashboard.getNumber("valMax", valMax);
 		
-		
 	}
 	
+
+	public double getDrivePowerScale() {
+		scale = 0.65;
+
+		defaultspeed = false;
+
+		if ( leftStick.getTrigger() || rightStick.getTrigger() ) {
+			scale = 0.85;
+		}
+		
+		if (leftStick.getTrigger() && rightStick.getTrigger()) {
+			scale = 1;
+		}
+		
+		if(scale == 0.65){
+			defaultspeed = true;
+		}
+
+		return scale;
+	}
+
 
 	// AUTONOMOUS MODE
 	
@@ -356,7 +403,6 @@ public class Robot extends IterativeRobot {
 		resetDistanceAndYaw();
 		currentAutonGoal = AutonGoal.PLACE_GEAR;
 		currentAutonMode = AutonMode.DRIVE_STRAIGHT_1;
-			
 	}
 
 	@Override
@@ -368,12 +414,14 @@ public class Robot extends IterativeRobot {
 				// Adaptive Drive corrects for yaw drift
 				driveStraight(0.2);
 				if(currentAutonGoal == AutonGoal.PLACE_GEAR){
+				
 					if (encRight.getDistance() > 2.4){
 						System.out.println(encRight.getDistance());
 						//pause needed maybe?
 						resetDistanceAndYaw();
 						currentAutonMode = AutonMode.BACKUP;
 					}
+					
 				}
 				else if (encRight.getDistance() > 3.0) {
 					resetDistanceAndYaw ();
@@ -389,13 +437,16 @@ public class Robot extends IterativeRobot {
 				}
 				break;
 			case BACKUP:
-				driveStraight(-0.1);
-				if (encRight.getDistance() < -1){
-					System.out.println(encRight.getDistance());
-					//pause needed maybe?
-					resetDistanceAndYaw();
-					currentAutonMode = AutonMode.FINISHED;
+				if (currentAutonGoal == AutonGoal.PLACE_GEAR){
+					driveStraight(-0.1);
+					if (encRight.getDistance() < -1){
+						System.out.println(encRight.getDistance());
+						//pause needed maybe?
+						resetDistanceAndYaw();
+						currentAutonMode = AutonMode.FINISHED;
+						}
 				}
+				break;
 			case SHOOT :
 				shooterRPM = 3500;
 				shooter.set(shooterRPM);
@@ -467,27 +518,6 @@ public class Robot extends IterativeRobot {
 		setDriveMotors (c+d, c-d);
 	}
 	
-	public double getDrivePowerScale() {
-		scale = 0.65;
-
-		defaultspeed = false;
-
-		if ( leftStick.getTrigger() || rightStick.getTrigger() ) {
-			scale = 0.85;
-		}
-		if (leftStick.getTrigger() && rightStick.getTrigger()) {
-			scale = 1;
-			shooter.set(0);
-			climber.set(0);
-			intake.set(0);
-		} 
-		if(scale == 0.65){
-			defaultspeed = true;
-		}
-
-		return scale;
-	}
-
  	public void reportEncoders() {
 		SmartDashboard.putNumber("Left Count", countL);
 		SmartDashboard.putNumber("Left Raw Distance", rawDistanceL);
@@ -591,6 +621,7 @@ public class Robot extends IterativeRobot {
 		autoModeButtonDown = operatorStick.getRawButton(4);
 		return (autoModeButtonDown && !lastValue);
 	}
+	
 	public void disabledPeriodic(){
 		int idx;
 		
