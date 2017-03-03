@@ -55,8 +55,7 @@ public class Robot extends IterativeRobot {
 
 	PowerDistributionPanel pdp;
 
-	double scale;
-	boolean defaultspeed;
+	DigitalInput GearSensor = new DigitalInput(0);
 
 	double shooterRPM = 0.0;
 
@@ -100,24 +99,18 @@ public class Robot extends IterativeRobot {
 	double I = 0.00001;
 	double D = 0.0;
 
-
-	DigitalInput GearSensor = new DigitalInput(0);
-
-	boolean preferredRPM;	
-
 	int n = 0;
 	
-	public enum AutonMode { DRIVE_STRAIGHT_1, TURN_1, BACKUP, FINISHED, SHOOT };
-	public enum AutonGoal {PLACE_GEAR, Shoot_All, Empty_Hoppers, Simple};
-	public enum Alliance {Red,Blue};
-	public enum fieldPosition {A,B,C,D,E,F,G, Default};
+	// Auton structures
+	public int AutonStage;
+	public enum AutonMode { START, DRIVE_STRAIGHT, DELAY, SHOOT, STOP };
+
+	AutonMode currentAutonMode = AutonMode.START;
+	public int currentAutonStage = 0;
+	public long startTime; // Used to measure elapsed time
 	
-	AutonMode currentAutonMode = AutonMode.FINISHED;
-	AutonGoal currentAutonGoal = AutonGoal.PLACE_GEAR;
-	Alliance currentAlliance = Alliance.Red;
-	fieldPosition currentFieldPosition = fieldPosition.D;
+	double autonDistance = 2.4;
 	
-	boolean autoModeButtonDown = false;
 
 	public Robot() {
 		// The code below sets up the Joysticks and talons for the drivetrain.
@@ -277,6 +270,7 @@ public class Robot extends IterativeRobot {
 
 	boolean increaseRPM = false;
 	boolean decreaseRPM = false;
+	
 	@Override
 	public void teleopPeriodic () {
 		// these need to be negated because forward on the stick is negative
@@ -376,9 +370,7 @@ public class Robot extends IterativeRobot {
 	
 
 	public double getDrivePowerScale() {
-		scale = 0.65;
-
-		defaultspeed = false;
+		double scale = 0.65;
 
 		if ( leftStick.getTrigger() || rightStick.getTrigger() ) {
 			scale = 0.85;
@@ -388,10 +380,6 @@ public class Robot extends IterativeRobot {
 			scale = 1;
 		}
 		
-		if(scale == 0.65){
-			defaultspeed = true;
-		}
-
 		return scale;
 	}
 
@@ -400,68 +388,92 @@ public class Robot extends IterativeRobot {
 	
 	@Override
 	public void autonomousInit() {
-		resetDistanceAndYaw();
-		currentAutonGoal = AutonGoal.PLACE_GEAR;
-		currentAutonMode = AutonMode.DRIVE_STRAIGHT_1;
+		currentAutonStage = 0;
+		currentAutonMode = AutonMode.START;
+		
+		// Read auton parameters from smart dashboard
+		// Read shooter RPM
+		shooterRPM = SmartDashboard.getNumber("shooterRPM", shooterRPM);
+		
+		// Read auton distance +ve or -ve
+		autonDistance = SmartDashboard.getNumber("autonDistance", autonDistance);
 	}
+	
 
 	@Override
 	public void autonomousPeriodic() {
-
-		switch (currentAutonMode) {
-
-			case DRIVE_STRAIGHT_1 :
-				// Adaptive Drive corrects for yaw drift
-				driveStraight(0.2);
-				if(currentAutonGoal == AutonGoal.PLACE_GEAR){
-				
-					if (encRight.getDistance() > 2.4){
-						System.out.println(encRight.getDistance());
-						//pause needed maybe?
-						resetDistanceAndYaw();
-						currentAutonMode = AutonMode.BACKUP;
-					}
-					
-				}
-				else if (encRight.getDistance() > 3.0) {
-					resetDistanceAndYaw ();
-					currentAutonMode = AutonMode.TURN_1;
-				}
-				break;
-	
-			case TURN_1 :
-				setDriveMotors(0.1, -0.1);
-				if (ahrs.getAngle() > 90.0) {
-					resetDistanceAndYaw ();
-					currentAutonMode = AutonMode.FINISHED;
-				}
-				break;
-			case BACKUP:
-				if (currentAutonGoal == AutonGoal.PLACE_GEAR){
-					driveStraight(-0.1);
-					if (encRight.getDistance() < -1){
-						System.out.println(encRight.getDistance());
-						//pause needed maybe?
-						resetDistanceAndYaw();
-						currentAutonMode = AutonMode.FINISHED;
-						}
-				}
-				break;
-			case SHOOT :
-				shooterRPM = 3500;
-				shooter.set(shooterRPM);
-				currentAutonMode = AutonMode.FINISHED;
-			case FINISHED :
-				setDriveMotors (0.0, 0.0);
-				break;
+		switch (currentAutonStage) {
+		case 1:
+			AutonShoot (shooterRPM, 5.0);
+			break;
+		case 2:
+			AutonDriveStraight (0.4, autonDistance);
+			break;
 		}
 		
-		// Report current mode on dashboard
-		SmartDashboard.putString ("currentAutonMode", currentAutonMode.toString());
+		// Advance the stage after each action
+		if (currentAutonMode == AutonMode.STOP) {
+			++currentAutonStage;
+			currentAutonMode = AutonMode.START;
+		}
 		
-		report();
+		SmartDashboard.putNumber ("currentAutonStage", currentAutonStage);
+		SmartDashboard.putString ("currentAutonMode", currentAutonMode.toString());
+	}
+	
+	public void AutonShoot (double RPM, double shootTime) {
+		switch (currentAutonMode) {
+		case START:
+			resetTimer();
+			currentAutonMode = AutonMode.DELAY;
+			shooter.set(shooterRPM);
+			break;
+		case DELAY:
+			// Give the shooter a second to spin up
+			if (elapsedTime() >= 1.0) {
+				resetTimer();
+				currentAutonMode = AutonMode.SHOOT;
+			}
+			break;
+		case SHOOT:
+			if (elapsedTime() >= shootTime) {
+				currentAutonMode = AutonMode.STOP;
+				shooter.set(0);
+			}
+			break;
+		default:
+			break;
+		}
 	}
 
+	public void AutonDriveStraight (double power, double distance) {
+		switch (currentAutonMode) {
+		case START: 
+			resetDistanceAndYaw(); 
+			break;
+		case DRIVE_STRAIGHT :
+			power = Math.abs(power);
+			if (distance < 0) power = -power;
+			driveStraight(power);
+
+			if (encRight.getDistance() > distance) {
+				currentAutonMode = AutonMode.STOP;
+			}
+			break;
+		default:
+			break;
+		}
+	}
+	public void resetTimer () {
+		startTime = System.nanoTime();
+	}
+	
+	// Return elapsed time since last reset in seconds
+	public double elapsedTime () {
+		return ( (System.nanoTime() - startTime) * 1.0e-9 );
+	}
+
+	
 	void resetDistanceAndYaw () {
 		ahrs.zeroYaw();
 		encLeft.reset();
@@ -540,14 +552,6 @@ public class Robot extends IterativeRobot {
 		SmartDashboard.putNumber("SP", shooter.getSetpoint());
 		SmartDashboard.putNumber(" S", shooter.getSpeed());
 		SmartDashboard.putNumber(" E", shooter.getError());
-
-		if (shooterRPM == 3250) {
-			preferredRPM = true;
-		} else {
-			preferredRPM = false;
-		}
-
-		SmartDashboard.putBoolean("Preferred RPM", preferredRPM);
 	}
 
 	public void reportAhrs() {
@@ -573,11 +577,6 @@ public class Robot extends IterativeRobot {
 
 	}
 
-	public void reportSpeed() {
-		SmartDashboard.putNumber("Speed", scale);
-		SmartDashboard.putBoolean("Default Speed", defaultspeed);
-	}
-
 	public void reportPower() {
 		double current = pdp.getTotalCurrent();
 		double power = pdp.getTotalPower();
@@ -591,7 +590,6 @@ public class Robot extends IterativeRobot {
 		reportAhrs();
 		updateEncoders();
 		reportEncoders();
-		reportSpeed();
 	}
 
 	public void updateEncoders() {
@@ -615,29 +613,10 @@ public class Robot extends IterativeRobot {
 		return Math.abs(expected-actual) < 5 * Math.ulp(expected);
 	}
 	
-	//select-able Auton
-	boolean CheckAutonButton () {
-		boolean lastValue = autoModeButtonDown;
-		autoModeButtonDown = operatorStick.getRawButton(4);
-		return (autoModeButtonDown && !lastValue);
+	/***
+	@Override
+	public void disabledPeriodic() {
 	}
-	
-	public void disabledPeriodic(){
-		int idx;
-		
-		if (CheckAutonButton()) {	
-			// Get current index
-			idx = currentAutonGoal.ordinal();
-			
-			// Get index of next choice with wraparound
-			idx = (idx + 1) % (AutonGoal.values().length);
-			
-			currentAutonGoal = AutonGoal.values()[idx];
-			currentAutonMode = AutonMode.DRIVE_STRAIGHT_1;
-		}
-
-		SmartDashboard.putString("Auto Routine", currentAutonGoal.name());
-	}
-
+	***/
 
 }
