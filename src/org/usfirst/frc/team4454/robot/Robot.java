@@ -32,6 +32,9 @@ import edu.wpi.first.wpilibj.vision.VisionThread;
 
 public class Robot extends IterativeRobot {
 	
+	private static final double SHOOTER_RPM_PRE_AUTON=5000.0;
+	private static final double SHOOTER_RPM_PRE_TELEOP=4000.0;
+	
 	Joystick leftStick;  // set to ID 1 in DriverStation
 	Joystick rightStick; // set to ID 2 in DriverStation
 	Joystick operatorStick;
@@ -57,7 +60,6 @@ public class Robot extends IterativeRobot {
 
 	DigitalInput GearSensor = new DigitalInput(0);
 
-	double shooterRPM = 0.0;
 
 	Encoder encLeft;
 	Encoder encRight;
@@ -80,8 +82,10 @@ public class Robot extends IterativeRobot {
 	// VISION DATA STRUCTURES
 	UsbCamera shooterCamera;
 	UsbCamera intakeCamera;
-	VisionThread visionThread;
-	CvSource outputStream;
+	VisionThread shooterVisionThread;
+	VisionThread intakeVisionThread;
+	CvSource shooterOutputStream;
+	CvSource intakeOutputStream;
 	
 	int exposureValue = 10;
 	boolean exposureChanged = false;
@@ -96,10 +100,9 @@ public class Robot extends IterativeRobot {
 	
 	double F = 0.027;
 	double P = 0.05;
-	double I = 0.00001;
-	double D = 0.0;
+	double I = 0.0;
+	double D = 1.0;
 
-	int n = 0;
 	
 	// Auton structures
 	public int AutonStage;
@@ -110,7 +113,9 @@ public class Robot extends IterativeRobot {
 	public long startTime; // Used to measure elapsed time
 	
 	double autonDistance = 2.4;
-	
+	double autonShootTime = 5.0;
+
+	double shooterRPM = SHOOTER_RPM_PRE_AUTON;
 
 	public Robot() {
 		// The code below sets up the Joysticks and talons for the drivetrain.
@@ -150,7 +155,7 @@ public class Robot extends IterativeRobot {
 		shooter.reverseOutput(true);
 
 		shooter.configNominalOutputVoltage(0.0f, -0.0f);
-		shooter.configPeakOutputVoltage(12.0f, -12.0f);
+		shooter.configPeakOutputVoltage(0.0f, -12.0f);
 		
 		shooter.enableBrakeMode(false);
 
@@ -159,8 +164,13 @@ public class Robot extends IterativeRobot {
 		shooter.setP(P);
 		shooter.setI(I);
 		shooter.setD(D);
+	//	shooter.SetVelocityMeasurementWindow(512);
 		shooter.changeControlMode(TalonControlMode.Speed);
 		
+		// only allow climber to go in one direction
+		climber.configNominalOutputVoltage(-0.0f, 0.0f);
+		climber.configPeakOutputVoltage(0.0f, 12.0f);
+
 		pdp = new PowerDistributionPanel(); 
 
 		// camera paths:
@@ -214,8 +224,28 @@ public class Robot extends IterativeRobot {
 		shooterCamera.setResolution(320, 240);
 		intakeCamera.setResolution(320, 240);
 
-		outputStream = CameraServer.getInstance().putVideo("hsvThreshold", 320, 240);
+		shooterOutputStream = CameraServer.getInstance().putVideo("shooterOverlay", 320, 240);
+		intakeOutputStream = CameraServer.getInstance().putVideo("intakeOverlay", 320, 240);
+		
+		shooterVisionThread = new VisionThread(shooterCamera, new LineVisionPipeline(),
+				pipeline->{
+					pipeline.g = 0;
+					pipeline.b = 255;
+					pipeline.r = 0;
+					pipeline.width = 2;
+					shooterOutputStream.putFrame(pipeline.lineOutput());
+				});
 
+		intakeVisionThread = new VisionThread(intakeCamera, new LineVisionPipeline(),
+				pipeline->{
+					pipeline.g = 0;
+					pipeline.b = 0;
+					pipeline.r = 255;
+					pipeline.width = 2;
+					intakeOutputStream.putFrame(pipeline.lineOutput());
+				});
+
+		/*
 		visionThread = new VisionThread(intakeCamera, new OurVisionPipeline(),
 				pipeline->{
 					outputStream.putFrame(pipeline.hsvThresholdOutput());
@@ -239,10 +269,11 @@ public class Robot extends IterativeRobot {
 					pipeline.hsvThresholdValue[1] = valMax;
 
 				});
+		*/
+		// visionThread.start();
+		shooterVisionThread.start();
+		intakeVisionThread.start();
 
-		visionThread.start();
-
-		
 		SmartDashboard.putNumber("Exposure", exposureValue);
 
 		SmartDashboard.putNumber("hueMin", hueMin);
@@ -256,7 +287,13 @@ public class Robot extends IterativeRobot {
 		SmartDashboard.putNumber("P", P);
 		SmartDashboard.putNumber("I", I);
 		SmartDashboard.putNumber("D", D);
-
+		
+		// Set auton parameters on smart dashboard
+		reportShooters();
+		SmartDashboard.putNumber("autonDistance", autonDistance);
+		SmartDashboard.putNumber("autonShootTime", autonShootTime);
+		
+		openServo(false);
 	}
 	
 	// TELEOP MODE
@@ -266,69 +303,38 @@ public class Robot extends IterativeRobot {
 		ahrs.zeroYaw();
 		intakeCamera.setExposureAuto();
 		shooterCamera.setExposureAuto();
+		
+		shooterRPM = SHOOTER_RPM_PRE_TELEOP;
 	}
 
-	boolean increaseRPM = false;
-	boolean decreaseRPM = false;
-	
+
 	@Override
 	public void teleopPeriodic () {
 		// these need to be negated because forward on the stick is negative
 		double leftAxis  = -leftStick.getY();
 		double rightAxis = -rightStick.getY();
-		boolean button;
 
 		double scale = getDrivePowerScale();
 		adaptiveDrive(leftAxis * scale, rightAxis * scale);
 		
-		climber.set(operatorStick.getRawAxis(1)); // Left X of Joystick
+		climber.set(operatorStick.getRawAxis(5)); // Right X of Joystick
 		
-		intake.set(operatorStick.getRawAxis(5)); // Right X of Joystick
+		intake.set(operatorStick.getRawAxis(1)); // Left X of Joystick
 		
-		if (operatorStick.getRawButton(1)) {
+		// shooter enable/disable
+		if (operatorStick.getRawAxis(3) > 0.15) {
 			shooter.set(shooterRPM);
 		} else {
 			shooter.set(0);
 		}
 		
-		intakeLED.set(operatorStick.getRawAxis(2));
+		// intake servo enable/disable
+		openServo(operatorStick.getRawAxis(2) > 0.15);
 		
-		button = operatorStick.getRawButton(5);
-		if ( ( !increaseRPM && button ) || (increaseRPM && (n%10 == 0)) ) {
-			if(shooterRPM < 6000) shooterRPM += 100;
-			n = 0;
-		}
-		increaseRPM = button;
+		// intakeLED.set(operatorStick.getRawAxis(2));
 		
-		button = operatorStick.getRawButton(6);
-		if ( ( !decreaseRPM && button ) || (decreaseRPM && (n%10 == 0)) ) {
-			if (shooterRPM > 0) shooterRPM -= 100;
-			n = 0;
-		}
-		decreaseRPM = button;
-		
-		++n;
-		
-		/***
-		if (n%10 == 0) {
-
-			if (operatorStick.getRawButton(8) && (shooterRPM >= 0.0))
-				shooterRPM -= 500.0;
-			
-			if (operatorStick.getRawButton(6) && (shooterRPM < 6000.0))
-				shooterRPM += 100.0;
-
-			if (operatorStick.getRawButton(5) && (shooterRPM >= 0.0))
-				shooterRPM -= 100.0;
-		}
-		***/
-		
-		if(operatorStick.getRawButton(9)) {
-			intakeFeed.set(0.0);
-		}
-		else if(operatorStick.getRawButton(10)) {
-			intakeFeed.set(1.0);
-		}
+		// set shooter rpm
+		setShooterRPM();
 
 		report();
 
@@ -368,6 +374,13 @@ public class Robot extends IterativeRobot {
 		
 	}
 	
+	public void openServo(boolean open) {
+		if (open) {
+			intakeFeed.set(0.0);
+		} else {
+			intakeFeed.set(0.5);
+		}
+	}
 
 	public double getDrivePowerScale() {
 		double scale = 0.65;
@@ -388,15 +401,18 @@ public class Robot extends IterativeRobot {
 	
 	@Override
 	public void autonomousInit() {
-		currentAutonStage = 0;
+		currentAutonStage = 1;
 		currentAutonMode = AutonMode.START;
 		
 		// Read auton parameters from smart dashboard
 		// Read shooter RPM
 		shooterRPM = SmartDashboard.getNumber("shooterRPM", shooterRPM);
 		
-		// Read auton distance +ve or -ve
+		// Read auton distance +ve or -ve if 0 not movement
 		autonDistance = SmartDashboard.getNumber("autonDistance", autonDistance);
+		
+		// Set shoot time in seconds if <= 0 no shot
+		autonShootTime = SmartDashboard.getNumber("autonShootTime", autonShootTime);
 	}
 	
 
@@ -404,7 +420,7 @@ public class Robot extends IterativeRobot {
 	public void autonomousPeriodic() {
 		switch (currentAutonStage) {
 		case 1:
-			AutonShoot (shooterRPM, 5.0);
+			AutonShoot (shooterRPM, autonShootTime);
 			break;
 		case 2:
 			AutonDriveStraight (0.4, autonDistance);
@@ -419,9 +435,17 @@ public class Robot extends IterativeRobot {
 		
 		SmartDashboard.putNumber ("currentAutonStage", currentAutonStage);
 		SmartDashboard.putString ("currentAutonMode", currentAutonMode.toString());
+		report();
+
 	}
 	
 	public void AutonShoot (double RPM, double shootTime) {
+		
+		if (shootTime <= 0) {
+			currentAutonMode = AutonMode.STOP;
+			return;
+		}
+		
 		switch (currentAutonMode) {
 		case START:
 			resetTimer();
@@ -430,15 +454,19 @@ public class Robot extends IterativeRobot {
 			break;
 		case DELAY:
 			// Give the shooter a second to spin up
-			if (elapsedTime() >= 1.0) {
+			if (elapsedTime() >= 1.0) {		shooter.configNominalOutputVoltage(0.0f, -0.0f);
+			shooter.configPeakOutputVoltage(0.0f, -12.0f);
+
 				resetTimer();
 				currentAutonMode = AutonMode.SHOOT;
+				openServo(true);
 			}
 			break;
 		case SHOOT:
 			if (elapsedTime() >= shootTime) {
 				currentAutonMode = AutonMode.STOP;
 				shooter.set(0);
+				openServo(false);
 			}
 			break;
 		default:
@@ -447,16 +475,21 @@ public class Robot extends IterativeRobot {
 	}
 
 	public void AutonDriveStraight (double power, double distance) {
+		
+		if (distance == 0) {
+			currentAutonMode = AutonMode.STOP;
+			return;
+		}
+		
 		switch (currentAutonMode) {
 		case START: 
 			resetDistanceAndYaw(); 
+			currentAutonMode = AutonMode.DRIVE_STRAIGHT;
 			break;
 		case DRIVE_STRAIGHT :
-			power = Math.abs(power);
-			if (distance < 0) power = -power;
-			driveStraight(power);
-
-			if (encRight.getDistance() > distance) {
+			driveStraight(Math.signum(distance) * Math.abs(power));
+			if (Math.abs(encRight.getDistance()) > Math.abs(distance)) {
+				driveStraight(0.0);
 				currentAutonMode = AutonMode.STOP;
 			}
 			break;
@@ -464,6 +497,7 @@ public class Robot extends IterativeRobot {
 			break;
 		}
 	}
+	
 	public void resetTimer () {
 		startTime = System.nanoTime();
 	}
@@ -492,10 +526,25 @@ public class Robot extends IterativeRobot {
 		middleLeft.set(l);
 	}
 	
+	int rpmButton = -1;
+	int shooterRPMIter = 0;
+	public void setShooterRPM() {
+		int button;
+		// set shooter rpm
+		button = operatorStick.getPOV();
+		if ( ( (rpmButton != 0) && (button == 0) ) || ((rpmButton == 0) && (shooterRPMIter%10 == 0)) ) {
+			if(shooterRPM < 6000) shooterRPM += 100;
+			shooterRPMIter = 0;
+		}
+		
+		if ( ( (rpmButton != 180) && (button == 180) ) || ((rpmButton == 180) && (shooterRPMIter%10 == 0)) ) {
+			if (shooterRPM > 0) shooterRPM -= 100;
+			shooterRPMIter = 0;
+		}
+		rpmButton = button;
+		++shooterRPMIter;
+	}
 	public void adaptiveDrive(double l, double r){
-
-		SmartDashboard.putNumber("LStick", l);
-		SmartDashboard.putNumber("RStick", r);
 
 		// alpha is a parameter between 0 and 1
 		final double alpha = 0.5;
@@ -515,12 +564,6 @@ public class Robot extends IterativeRobot {
 		double l_out = c + d;
 		double r_out = c - d;
 
-		SmartDashboard.putNumber("PowerVal", c);
-		SmartDashboard.putNumber("DirectionVal", d);
-		SmartDashboard.putNumber("LOut", l_out);
-		SmartDashboard.putNumber("ROut", r_out);
-		SmartDashboard.putNumber("Corr", corr);
-
 		setDriveMotors(l_out, r_out);
 	}
 	
@@ -531,6 +574,9 @@ public class Robot extends IterativeRobot {
 	}
 	
  	public void reportEncoders() {
+ 		//SmartDashboard.putNumber("Left Distance", distanceL);
+ 		SmartDashboard.putNumber("Right Distance", distanceR);
+ 		/*
 		SmartDashboard.putNumber("Left Count", countL);
 		SmartDashboard.putNumber("Left Raw Distance", rawDistanceL);
 		SmartDashboard.putNumber("Left Distance", distanceL);
@@ -540,18 +586,21 @@ public class Robot extends IterativeRobot {
 
 		SmartDashboard.putNumber("Right Count", countR);
 		SmartDashboard.putNumber("Right Raw Distance", rawDistanceR);
-		SmartDashboard.putNumber("Right Distance", distanceR);
 		SmartDashboard.putNumber("Right Rate", rateR);
 		SmartDashboard.putBoolean("Right Direction", directionR);
 		SmartDashboard.putBoolean("Right Stopped", stoppedR);
+		*/
 	}
 
 	public void reportShooters() {
-		SmartDashboard.putNumber(" J", shooterRPM);
-		SmartDashboard.putNumber(" V", shooter.getOutputVoltage());
-		SmartDashboard.putNumber("SP", shooter.getSetpoint());
-		SmartDashboard.putNumber(" S", shooter.getSpeed());
-		SmartDashboard.putNumber(" E", shooter.getError());
+		SmartDashboard.putNumber("shooterRPM", shooterRPM);
+		SmartDashboard.putNumber("shooterSpeed", shooter.getSpeed());
+
+		/*
+		 * SmartDashboard.putNumber(" V", shooter.getOutputVoltage());
+		 * SmartDashboard.putNumber("SP", shooter.getSetpoint());
+		 * SmartDashboard.putNumber(" E", shooter.getError());
+		 */
 	}
 
 	public void reportAhrs() {
@@ -587,9 +636,10 @@ public class Robot extends IterativeRobot {
 
 	public void report() {
 		reportShooters();
-		reportAhrs();
+		// reportAhrs();
 		updateEncoders();
 		reportEncoders();
+		reportPower();
 	}
 
 	public void updateEncoders() {
@@ -613,10 +663,10 @@ public class Robot extends IterativeRobot {
 		return Math.abs(expected-actual) < 5 * Math.ulp(expected);
 	}
 	
-	/***
 	@Override
 	public void disabledPeriodic() {
+		setShooterRPM();
+		report();
 	}
-	***/
 
 }
