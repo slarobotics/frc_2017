@@ -40,7 +40,9 @@ public class OurVisionPipeline implements VisionPipeline {
 	private ArrayList<MatOfPoint> filterContoursOutput = new ArrayList<MatOfPoint>();
 
 	public boolean foundTarget = false; // indicate whether you found the target
-	int targetTop, targetBottom, targetLeft, targetRight;
+	int targetTop, targetBottom, targetLeft, targetRight, targetHeight, targetWidth;
+	
+	double targetDistance;
 
 
 	static {
@@ -214,8 +216,13 @@ public class OurVisionPipeline implements VisionPipeline {
 
 					targetLeft  = Math.min(r1.x, r2.x);
 					targetRight = Math.max(r1.x+r1.width, r2.x+r2.width);
+					
+					targetHeight = targetBottom - targetTop;
+					targetWidth  = targetRight - targetLeft;
 
-					aspectRatio = ((double)(targetBottom - targetTop)) / ((double)(targetRight - targetLeft));
+					aspectRatio = targetHeight / targetWidth;
+
+					targetDistance = 4 * 240 / (2 * targetHeight);
 
 					if (Math.abs(aspectRatio - (5.0/10.25)) < 0.1) {
 						foundTarget = true;

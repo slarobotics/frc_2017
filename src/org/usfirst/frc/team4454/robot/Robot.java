@@ -84,8 +84,10 @@ public class Robot extends IterativeRobot {
 	UsbCamera intakeCamera;
 	VisionThread shooterVisionThread;
 	VisionThread intakeVisionThread;
+	VisionThread testVisionThread;
 	CvSource shooterOutputStream;
 	CvSource intakeOutputStream;
+	CvSource testOutputStream;
 	
 	int exposureValue = 10;
 	boolean exposureChanged = false;
@@ -226,6 +228,7 @@ public class Robot extends IterativeRobot {
 
 		shooterOutputStream = CameraServer.getInstance().putVideo("shooterOverlay", 320, 240);
 		intakeOutputStream = CameraServer.getInstance().putVideo("intakeOverlay", 320, 240);
+		testOutputStream = CameraServer.getInstance().putVideo("testOverlay", 320, 240);
 		
 		shooterVisionThread = new VisionThread(shooterCamera, new LineVisionPipeline(),
 				pipeline->{
@@ -245,13 +248,12 @@ public class Robot extends IterativeRobot {
 					intakeOutputStream.putFrame(pipeline.lineOutput());
 				});
 
-		/*
-		visionThread = new VisionThread(intakeCamera, new OurVisionPipeline(),
+		testVisionThread = new VisionThread(intakeCamera, new OurVisionPipeline(),
 				pipeline->{
-					outputStream.putFrame(pipeline.hsvThresholdOutput());
+					testOutputStream.putFrame(pipeline.hsvThresholdOutput());
 
 					if (pipeline.foundTarget) {
-					 // System.out.println("Found a target!!");
+						SmartDashboard.putNumber("Target Distance", pipeline.targetDistance); 
 					}
 					
 					if (exposureChanged) {
@@ -269,8 +271,8 @@ public class Robot extends IterativeRobot {
 					pipeline.hsvThresholdValue[1] = valMax;
 
 				});
-		*/
-		// visionThread.start();
+		
+		testVisionThread.start();
 		shooterVisionThread.start();
 		intakeVisionThread.start();
 
@@ -425,6 +427,9 @@ public class Robot extends IterativeRobot {
 		case 2:
 			AutonDriveStraight (0.4, autonDistance);
 			break;
+		case 3:
+			AutonHopper(0.4);
+			break;
 		}
 		
 		// Advance the stage after each action
@@ -439,6 +444,10 @@ public class Robot extends IterativeRobot {
 
 	}
 	
+	public void AutonHopper (double power) {
+		
+	}
+	
 	public void AutonShoot (double RPM, double shootTime) {
 		
 		if (shootTime <= 0) {
@@ -450,13 +459,13 @@ public class Robot extends IterativeRobot {
 		case START:
 			resetTimer();
 			currentAutonMode = AutonMode.DELAY;
-			shooter.set(shooterRPM);
+			shooter.set(RPM);
 			break;
 		case DELAY:
 			// Give the shooter a second to spin up
-			if (elapsedTime() >= 1.0) {		shooter.configNominalOutputVoltage(0.0f, -0.0f);
-			shooter.configPeakOutputVoltage(0.0f, -12.0f);
-
+			if (elapsedTime() >= 1.0) {		
+				shooter.configNominalOutputVoltage(0.0f, -0.0f);
+				shooter.configPeakOutputVoltage(0.0f, -12.0f);
 				resetTimer();
 				currentAutonMode = AutonMode.SHOOT;
 				openServo(true);
