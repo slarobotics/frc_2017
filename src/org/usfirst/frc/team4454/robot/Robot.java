@@ -434,7 +434,7 @@ public class Robot extends IterativeRobot {
 			AutonHopper(0.4);
 			break;
 		case 4:
-			AutonGear(0.4);
+			AutonDriveStraight (0.4, targetDistance);
 			break;
 		}
 		
@@ -452,31 +452,6 @@ public class Robot extends IterativeRobot {
 	
 	public void AutonHopper (double power) {
 		
-	}
-	
-	public void AutonGear(double power) {
-		
-		if (targetDistance == 0) {
-			currentAutonMode = AutonMode.STOP;
-			return;
-		}
-		
-		switch (currentAutonMode) {
-		case START: 
-			resetDistanceAndYaw(); 
-			currentAutonMode = AutonMode.DRIVE_STRAIGHT;
-			break;
-		case DRIVE_TO_DISTANCE:
-			driveStraight(Math.signum(targetDistance) * Math.abs(power));
-			if (Math.abs(encRight.getDistance()) > Math.abs(targetDistance)) { // We probably need to change this number a little bit.
-				//Release Gear here Delay may be needed for servos
-				driveStraight(0.0); // We will probably have to make it go backwards before stopping.
-				currentAutonMode = AutonMode.STOP;
-			}
-			break;
-		default:
-			break;
-		}
 	}
 	
 	public void AutonShoot (double RPM, double shootTime) {
