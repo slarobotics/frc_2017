@@ -110,7 +110,7 @@ public class Robot extends IterativeRobot {
 	
 	// Auton structures
 	public int AutonStage;
-	public enum AutonMode { START, DRIVE_STRAIGHT, DELAY, SHOOT, STOP, DRIVE_TO_DISTANCE };
+	public enum AutonMode { START, DRIVE_STRAIGHT, DELAY, SHOOT, STOP };
 
 	AutonMode currentAutonMode = AutonMode.START;
 	public int currentAutonStage = 0;
@@ -424,16 +424,21 @@ public class Robot extends IterativeRobot {
 	@Override
 	public void autonomousPeriodic() {
 		switch (currentAutonStage) {
-		case 1:
+		case 1: // Auton Shooting Mode
 			AutonShoot (shooterRPM, autonShootTime);
 			break;
-		case 2:
+		case 2: // Auton Drive Straight Mode
 			AutonDriveStraight (0.4, autonDistance);
 			break;
-		case 3:
+		case 3: // Auton Hopper Mode
 			AutonHopper(0.4);
 			break;
-		case 4:
+		case 4: // Auton Gear Mode
+			// Todo:
+			// Needs to drop gear
+			// We need to see if this is the exact distance we need
+			// Needs to move a little backwards after placing gear
+			// Is dropping gear all we want it to do?
 			AutonDriveStraight (0.4, targetDistance);
 			break;
 		}
