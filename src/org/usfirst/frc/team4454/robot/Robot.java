@@ -77,6 +77,8 @@ public class Robot extends IterativeRobot {
 	double rateL;
 	boolean directionL;
 	boolean stoppedL;
+	
+	double targetDistance;
 
 
 	// VISION DATA STRUCTURES
@@ -108,7 +110,7 @@ public class Robot extends IterativeRobot {
 	
 	// Auton structures
 	public int AutonStage;
-	public enum AutonMode { START, DRIVE_STRAIGHT, DELAY, SHOOT, STOP };
+	public enum AutonMode { START, DRIVE_STRAIGHT, DELAY, SHOOT, STOP, DRIVE_TO_DISTANCE };
 
 	AutonMode currentAutonMode = AutonMode.START;
 	public int currentAutonStage = 0;
@@ -253,7 +255,8 @@ public class Robot extends IterativeRobot {
 					testOutputStream.putFrame(pipeline.hsvThresholdOutput());
 
 					if (pipeline.foundTarget) {
-						SmartDashboard.putNumber("Target Distance", pipeline.targetDistance); 
+						targetDistance = pipeline.targetDistance;
+						SmartDashboard.putNumber("Target Distance", targetDistance); 
 					}
 					
 					if (exposureChanged) {
@@ -383,7 +386,7 @@ public class Robot extends IterativeRobot {
 			intakeFeed.set(0.5);
 		}
 	}
-
+	
 	public double getDrivePowerScale() {
 		double scale = 0.65;
 
@@ -430,6 +433,9 @@ public class Robot extends IterativeRobot {
 		case 3:
 			AutonHopper(0.4);
 			break;
+		case 4:
+			AutonGear(0.4);
+			break;
 		}
 		
 		// Advance the stage after each action
@@ -446,6 +452,31 @@ public class Robot extends IterativeRobot {
 	
 	public void AutonHopper (double power) {
 		
+	}
+	
+	public void AutonGear(double power) {
+		
+		if (targetDistance == 0) {
+			currentAutonMode = AutonMode.STOP;
+			return;
+		}
+		
+		switch (currentAutonMode) {
+		case START: 
+			resetDistanceAndYaw(); 
+			currentAutonMode = AutonMode.DRIVE_STRAIGHT;
+			break;
+		case DRIVE_TO_DISTANCE:
+			driveStraight(Math.signum(targetDistance) * Math.abs(power));
+			if (Math.abs(encRight.getDistance()) > Math.abs(targetDistance)) { // We probably need to change this number a little bit.
+				//Release Gear here Delay may be needed for servos
+				driveStraight(0.0); // We will probably have to make it go backwards before stopping.
+				currentAutonMode = AutonMode.STOP;
+			}
+			break;
+		default:
+			break;
+		}
 	}
 	
 	public void AutonShoot (double RPM, double shootTime) {
