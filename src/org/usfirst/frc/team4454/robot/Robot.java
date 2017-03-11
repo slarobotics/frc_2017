@@ -256,7 +256,6 @@ public class Robot extends IterativeRobot {
 
 					if (pipeline.foundTarget) {
 						targetDistance = pipeline.targetDistance;
-						SmartDashboard.putNumber("Target Distance", targetDistance); 
 					}
 					
 					if (exposureChanged) {
@@ -336,7 +335,7 @@ public class Robot extends IterativeRobot {
 		// intake servo enable/disable
 		openServo(operatorStick.getRawAxis(2) > 0.15);
 		
-		// intakeLED.set(operatorStick.getRawAxis(2));
+		intakeLED.set(0.05);
 		
 		// set shooter rpm
 		setShooterRPM();
@@ -660,6 +659,7 @@ public class Robot extends IterativeRobot {
 		updateEncoders();
 		reportEncoders();
 		reportPower();
+		SmartDashboard.putNumber("Target Distance", targetDistance); 
 	}
 
 	public void updateEncoders() {

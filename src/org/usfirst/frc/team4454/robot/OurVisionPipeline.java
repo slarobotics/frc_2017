@@ -220,9 +220,9 @@ public class OurVisionPipeline implements VisionPipeline {
 					targetHeight = targetBottom - targetTop;
 					targetWidth  = targetRight - targetLeft;
 
-					aspectRatio = targetHeight / targetWidth;
+					aspectRatio = (double)targetHeight / (double)targetWidth;
 
-					targetDistance = 4 * 240 / (2 * targetHeight);
+					targetDistance = 4 * 4 * 240 / (2 * targetHeight); // rough distance in inches (+/- 4)
 
 					if (Math.abs(aspectRatio - (5.0/10.25)) < 0.1) {
 						foundTarget = true;
