@@ -51,6 +51,10 @@ public class Robot extends IterativeRobot {
 	CANTalon intake;
 	
 	Servo intakeFeed;
+	Servo GearOne;
+	Servo GearTwo;
+
+
 	
 	Victor intakeLED;
 
@@ -152,6 +156,8 @@ public class Robot extends IterativeRobot {
 		climber = new CANTalon(9);
 		
 		intakeFeed = new Servo(4);
+		GearOne = new Servo(5);
+		GearTwo = new Servo(6);
 
 		shooter.setFeedbackDevice(FeedbackDevice.CtreMagEncoder_Relative);
 
@@ -573,9 +579,11 @@ public class Robot extends IterativeRobot {
 	
 	public void setGear (boolean open) {
 		if (open) {
-			//gear.set(0.0);
+			GearOne.set(0.0);
+			GearTwo.set(0.0);
 		} else {
-			//gear.set(0.5);
+			GearOne.set(0.5);
+			GearTwo.set(0.5);
 		}
 	}
 
