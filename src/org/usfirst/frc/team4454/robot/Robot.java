@@ -110,7 +110,7 @@ public class Robot extends IterativeRobot {
 	
 	// Auton structures
 	public int AutonStage;
-	public enum AutonMode { START, DRIVE_STRAIGHT, DELAY, SHOOT, STOP };
+	public enum AutonMode { START, DRIVE_STRAIGHT, DELAY, SHOOT, STOP, RELEASE_GEAR, BACK_UP, MOVE_TO_GEAR };
 
 	AutonMode currentAutonMode = AutonMode.START;
 	public int currentAutonStage = 0;
@@ -430,15 +430,10 @@ public class Robot extends IterativeRobot {
 			AutonDriveStraight (0.4, autonDistance);
 			break;
 		case 3: // Auton Hopper Mode
-			AutonHopper(0.4);
+			AutonHopper(0.4, 2);
 			break;
 		case 4: // Auton Gear Mode
-			// Todo:
-			// Needs to drop gear
-			// We need to see if this is the exact distance we need
-			// Needs to move a little backwards after placing gear
-			// Is dropping gear all we want it to do?
-			AutonDriveStraight (0.4, targetDistance);
+			AutonGear(0.4, targetDistance, (int)SmartDashboard.getNumber("autonPosition", 0));
 			break;
 		}
 		
@@ -454,9 +449,50 @@ public class Robot extends IterativeRobot {
 
 	}
 	
-	public void AutonHopper (double power) {
+	public void AutonHopper (double power, int placement) {
 		
 	}
+	
+	public void AutonGear (double power, double distance, int placement) {
+		// This may run into some issues sadly because of how the function is being run but we can deal with them later.
+		switch (currentAutonMode) {
+		case START: 
+			setGear(false);
+			currentAutonMode = AutonMode.MOVE_TO_GEAR;
+			break;
+		case MOVE_TO_GEAR:
+			if (placement == 0) {
+				// Could not find value for auton placement.
+				return;
+			}
+			
+			if (placement == 1) {
+				
+			}
+			
+			if (placement == 2) {
+				AutonDriveStraight(power, distance); // Go to target distance
+			}
+			
+			if (placement == 3) {
+				
+			}
+			currentAutonMode = AutonMode.RELEASE_GEAR;
+			break;
+		case RELEASE_GEAR:
+			setGear(true);
+			currentAutonMode = AutonMode.BACK_UP;
+			break;
+		case BACK_UP:
+			// We may need some sort of a delay
+			AutonDriveStraight(-power, autonDistance); // Back up may need to go slower that going forward.
+			setGear(false);
+			// Auton Shoot?
+		default:
+			break;
+		}
+		
+	}	
 	
 	public void AutonShoot (double RPM, double shootTime) {
 		
@@ -534,6 +570,14 @@ public class Robot extends IterativeRobot {
 	}
 
 	// UTILITY METHODS
+	
+	public void setGear (boolean open) {
+		if (open) {
+			//gear.set(0.0);
+		} else {
+			//gear.set(0.5);
+		}
+	}
 
 	public void setDriveMotors(double l, double r) {
 		frontRight.set(r);
