@@ -114,7 +114,7 @@ public class Robot extends IterativeRobot {
 	
 	// Auton structures
 	public int AutonStage;
-	public enum AutonMode { START, DRIVE_STRAIGHT, DELAY, SHOOT, STOP, RELEASE_GEAR, BACK_UP, MOVE_TO_GEAR };
+	public enum AutonMode { START, DRIVE_STRAIGHT, TURN, DELAY, SHOOT, RELEASE_GEAR,  MOVE_TO_GEAR, BACK_UP, STOP };
 
 	AutonMode currentAutonMode = AutonMode.START;
 	public int currentAutonStage = 0;
@@ -258,7 +258,7 @@ public class Robot extends IterativeRobot {
 
 		testVisionThread = new VisionThread(intakeCamera, new OurVisionPipeline(),
 				pipeline->{
-					testOutputStream.putFrame(pipeline.hsvThresholdOutput());
+					testOutputStream.putFrame(pipeline.overlayOutput());
 
 					if (pipeline.foundTarget) {
 						targetDistance = pipeline.targetDistance;
@@ -433,13 +433,9 @@ public class Robot extends IterativeRobot {
 			AutonShoot (shooterRPM, autonShootTime);
 			break;
 		case 2: // Auton Drive Straight Mode
-			AutonDriveStraight (0.4, autonDistance);
-			break;
-		case 3: // Auton Hopper Mode
-			AutonHopper(0.4, 2);
-			break;
-		case 4: // Auton Gear Mode
-			AutonGear(0.4, targetDistance, (int)SmartDashboard.getNumber("autonPosition", 0));
+			// AutonDriveStraight (0.4, autonDistance);
+			// Distance Parameters need to be recomputed
+			AutonSideGear (0.5, 0.5, 0.16, 60, 1.2, 5.0);
 			break;
 		}
 		
@@ -455,6 +451,87 @@ public class Robot extends IterativeRobot {
 
 	}
 	
+	// Place gear on side peg, d1 first distance, d2 second distance, timeout before backup
+	public void AutonSideGear (double forward_power, double turn_power, double d1, double turn_angle, double d2, double timeout) {
+		// START
+		// Go straight for d1
+		// Turn by angle, +60 for left -60 for right
+		// Go straight for d2 or until timeout
+		// Drop gear
+		// Wait for one second
+		// Backup 1 meter
+		// STOP
+		
+		double temp;
+		
+		switch (currentAutonMode) {
+		case START:
+			resetDistanceAndYaw();
+			currentAutonMode = AutonMode.DRIVE_STRAIGHT;
+			break;
+		case DRIVE_STRAIGHT:
+			driveStraight(Math.signum(d1) * Math.abs(forward_power));
+			if (Math.abs(encRight.getDistance()) > Math.abs(d1)) {
+				driveStraight(0.0);
+				resetDistanceAndYaw();
+				currentAutonMode = AutonMode.TURN;
+			}
+			break;
+		case TURN:
+			temp = Math.signum(turn_angle) * turn_power;
+			setDriveMotors(temp, -temp);
+			if (Math.abs(ahrs.getAngle()) > Math.abs(turn_angle)) {
+				setDriveMotors(0.0, 0.0);
+				resetDistanceAndYaw();
+				resetTimer();
+				currentAutonMode = AutonMode.MOVE_TO_GEAR;
+			}
+			break;
+		case MOVE_TO_GEAR:
+			driveStraight(Math.signum(d2) * Math.abs(forward_power));
+			// Note that we check the timeout to handle situations where you drive into the airship
+			if  ( (Math.abs(encRight.getDistance()) > Math.abs(d2)) || (elapsedTime() > timeout) ) {
+				driveStraight(0.0);
+				resetDistanceAndYaw();
+				resetTimer();
+				currentAutonMode = AutonMode.RELEASE_GEAR;
+			}
+			break;
+		case RELEASE_GEAR:
+			setGear(true);
+			if (elapsedTime() > 0.5) {
+				resetDistanceAndYaw();
+				currentAutonMode = AutonMode.BACK_UP;
+			}
+			break;
+		case BACK_UP:
+			driveStraight(-1.0 * Math.abs(forward_power));
+			if (Math.abs(encRight.getDistance()) > 1.0) {
+				driveStraight(0.0);
+				resetDistanceAndYaw();
+				currentAutonMode = AutonMode.STOP;
+			}
+			break;
+		default:
+			break;
+		}
+	}
+
+	public void AutonCenterGear (double d1, double timeout) {
+	}
+
+	// Auto shooter to be invoked by pressing and holding a button, first squeeze resets state to start
+	public void AutoShooter () {
+		// Check if the shooter target is in view - if not state = STOP
+
+		// Turn to shooter target and set RPM based on height of target in image - need function to compute this mapping
+
+		// Wait for system to spin up
+
+		// OpenServo and let fly
+	}
+
+    
 	public void AutonHopper (double power, int placement) {
 		
 	}
@@ -482,6 +559,8 @@ public class Robot extends IterativeRobot {
 			
 			if (placement == 3) {
 				
+			} else {
+				return;
 			}
 			currentAutonMode = AutonMode.RELEASE_GEAR;
 			break;
@@ -615,6 +694,7 @@ public class Robot extends IterativeRobot {
 		rpmButton = button;
 		++shooterRPMIter;
 	}
+	
 	public void adaptiveDrive(double l, double r){
 
 		// alpha is a parameter between 0 and 1
@@ -688,13 +768,11 @@ public class Robot extends IterativeRobot {
 
 		SmartDashboard.putNumber(   "IMU_TotalYaw",         ahrs.getAngle());
 
-
 		/* Omnimount Yaw Axis Information                                           */
 		/* For more info, see http://navx-mxp.kauailabs.com/installation/omnimount  */
 		AHRS.BoardYawAxis yaw_axis = ahrs.getBoardYawAxis();
 		SmartDashboard.putString(   "YawAxisDirection",     yaw_axis.up ? "Up" : "Down" );
 		SmartDashboard.putNumber(   "YawAxis",              yaw_axis.board_axis.getValue() );
-
 	}
 
 	public void reportPower() {

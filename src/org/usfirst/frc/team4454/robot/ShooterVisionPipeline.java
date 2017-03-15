@@ -1,6 +1,5 @@
 package org.usfirst.frc.team4454.robot;
 
-
 import java.lang.Math;
 import java.util.ArrayList;
 import java.util.List;
@@ -8,14 +7,9 @@ import java.util.List;
 import edu.wpi.first.wpilibj.vision.VisionPipeline;
 
 import org.opencv.core.*;
-// import org.opencv.core.Core.*;
-// import org.opencv.features2d.FeatureDetector;
-// import org.opencv.imgcodecs.Imgcodecs;
 import org.opencv.imgproc.*;
-// import org.opencv.objdetect.*;
 
-
-public class OurVisionPipeline implements VisionPipeline {
+public class ShooterVisionPipeline implements VisionPipeline {
 
 	// Process Parameters
 	double[] hsvThresholdHue = {0.0, 255.0};
@@ -35,7 +29,7 @@ public class OurVisionPipeline implements VisionPipeline {
 	double filterContoursMaxRatio = 0.5;
 
 	//Outputs
-	private Mat hsvThresholdOutput, overlayOutput;
+	private Mat overlayOutput, hsvThresholdOutput;
 	private ArrayList<MatOfPoint> findContoursOutput = new ArrayList<MatOfPoint>();
 	private ArrayList<MatOfPoint> filterContoursOutput = new ArrayList<MatOfPoint>();
 
@@ -85,7 +79,7 @@ public class OurVisionPipeline implements VisionPipeline {
 	public Mat hsvThresholdOutput() {
 		return hsvThresholdOutput;
 	}
-	
+
 	public Mat overlayOutput() {
 		return overlayOutput;
 	}
@@ -197,53 +191,52 @@ public class OurVisionPipeline implements VisionPipeline {
 		}
 	}
 
+    private void findTarget (List<MatOfPoint> inputContours) {
+	int n = inputContours.size();
+	int i, j;
+	Rect r1, r2;
+	double temp, aspectRatio;
 
-	private void findTarget (List<MatOfPoint> inputContours) {
-		int n = inputContours.size();
-		int i, j;
-		Rect r1, r2;
-		double temp, aspectRatio;
+	foundTarget = false;
 
-		foundTarget = false;
+	if (n >= 2) {
+	    for (i = 0; i < n; ++i) {
+		r1 = Imgproc.boundingRect(inputContours.get(i));
 
-		if (n >= 2) {
-			for (i = 0; i < n; ++i) {
-				r1 = Imgproc.boundingRect(inputContours.get(i));
+		for (j = 0; j < n; ++j) {
+		    r2 = Imgproc.boundingRect(inputContours.get(j));
 
-				for (j = (i+1); j < n; ++j) {
-					r2 = Imgproc.boundingRect(inputContours.get(j));
+					
+		    // compute y center of r2 relative to r1
+		    temp = (r2.y + 0.5*r2.height) - r1.y;
 
-					// compute y center of r2 relative to r1
-					temp = (r2.y + 0.5*r2.height) - r1.y;
+		    if ( (temp >= 0.0) && (temp <= r1.height) ) {
 
-					if ( (temp >= 0.0) && (temp <= r1.height) ) {
+			targetTop    = Math.min(r1.y, r2.y);
+			targetBottom = Math.max(r1.y+r1.height, r2.y+r2.height);
 
-						targetTop    = Math.min(r1.y, r2.y);
-						targetBottom = Math.max(r1.y+r1.height, r2.y+r2.height);
+			targetLeft  = Math.min(r1.x, r2.x);
+			targetRight = Math.max(r1.x+r1.width, r2.x+r2.width);
+					
+			targetHeight = targetBottom - targetTop;
+			targetWidth  = targetRight - targetLeft;
 
-						targetLeft  = Math.min(r1.x, r2.x);
-						targetRight = Math.max(r1.x+r1.width, r2.x+r2.width);
+			aspectRatio = (double)targetHeight / (double)targetWidth;
 
-						targetHeight = targetBottom - targetTop;
-						targetWidth  = targetRight - targetLeft;
+			targetDistance = 4 * 4 * 240 / (2 * targetHeight); // rough distance in inches (+/- 4)
 
-						aspectRatio = (double)targetHeight / (double)targetWidth;
+			if (Math.abs(aspectRatio - (5.0/10.25)) < 0.1) {
+			    foundTarget = true;
 
-						targetDistance = 4 * 4 * 240 / (2 * targetHeight); // rough distance in inches (+/- 4)
-
-						if (Math.abs(aspectRatio - (5.0/10.25)) < 0.1) {
-							foundTarget = true;
-
-							Imgproc.rectangle(overlayOutput, 
-									new Point(targetLeft, targetTop), 
-									new Point(targetRight, targetBottom), 
-									new Scalar(0, 0, 255));
-							return;
-						}
-					}
-				}
+			    Imgproc.rectangle(hsvThresholdOutput, 
+					      new Point(targetLeft, targetTop), 
+					      new Point(targetRight, targetBottom), 
+					      new Scalar(255, 0, 0));
+			    return;
 			}
+		    }
 		}
+	    }
 	}
-	
+    }
 }
