@@ -527,7 +527,57 @@ public class Robot extends IterativeRobot {
 		}
 	}
 
-	public void AutonCenterGear (double d1, double timeout) {
+	public void AutonCenterGear (double d1, double d2, double forward_power, double timeout) {
+		// START
+		// Go straight for d1
+		// Go straight for d2 or until timeout
+		// Drop gear
+		// Wait for one second
+		// Backup 1 meter
+		// STOP
+		
+		switch (currentAutonMode) {
+		case START:
+			resetDistanceAndYaw();
+			currentAutonMode = AutonMode.DRIVE_STRAIGHT;
+			break;
+		case DRIVE_STRAIGHT:
+			driveStraight(Math.signum(d1) * Math.abs(forward_power));
+			if (Math.abs(encRight.getDistance()) > Math.abs(d1)) {
+				driveStraight(0.0);
+				resetDistanceAndYaw();
+				currentAutonMode = AutonMode.MOVE_TO_GEAR;
+			}
+			break;
+			
+		case MOVE_TO_GEAR:
+			driveStraight(Math.signum(d2) * Math.abs(forward_power));
+			// Note that we check the timeout to handle situations where you drive into the airship
+			if  ( (Math.abs(encRight.getDistance()) > Math.abs(d2)) || (elapsedTime() > timeout) ) {
+				driveStraight(0.0);
+				resetDistanceAndYaw();
+				resetTimer();
+				currentAutonMode = AutonMode.RELEASE_GEAR;
+			}
+			break;
+		case RELEASE_GEAR:
+			setGear(true);
+			if (elapsedTime() > 0.5) {
+				resetDistanceAndYaw();
+				currentAutonMode = AutonMode.BACK_UP;
+			}
+			break;
+		case BACK_UP:
+			driveStraight(-1.0 * Math.abs(forward_power));
+			if (Math.abs(encRight.getDistance()) > 1.0) {
+				driveStraight(0.0);
+				resetDistanceAndYaw();
+				currentAutonMode = AutonMode.STOP;
+			}
+			break;
+		default:
+			break;
+		}
 	}
 
 	// Auto shooter to be invoked by pressing and holding a button, first squeeze resets state to start
