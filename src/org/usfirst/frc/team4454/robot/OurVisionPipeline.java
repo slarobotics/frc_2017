@@ -34,14 +34,16 @@ public class OurVisionPipeline implements VisionPipeline {
 	double filterContoursMinRatio = 0.3;
 	double filterContoursMaxRatio = 0.5;
 
-	//Outputs
-	private Mat hsvThresholdOutput, overlayOutput;
+	// Outputs
+	// This needs to be initialized or hsvThreshold fails with a null pointer exception
+	private Mat hsvThresholdOutput = new Mat();
+	private Mat overlayOutput;
 	private ArrayList<MatOfPoint> findContoursOutput = new ArrayList<MatOfPoint>();
 	private ArrayList<MatOfPoint> filterContoursOutput = new ArrayList<MatOfPoint>();
 
 	public boolean foundTarget = false; // indicate whether you found the target
 	int targetTop, targetBottom, targetLeft, targetRight, targetHeight, targetWidth;
-	
+
 	double targetDistance;
 
 
@@ -55,7 +57,7 @@ public class OurVisionPipeline implements VisionPipeline {
 	public void process(Mat source0) {
 		// Step HSV_Threshold0:
 		Mat hsvThresholdInput = source0;
-		
+
 		overlayOutput = source0;
 
 		hsvThreshold(hsvThresholdInput, hsvThresholdHue, hsvThresholdSaturation, hsvThresholdValue, hsvThresholdOutput);
@@ -85,7 +87,7 @@ public class OurVisionPipeline implements VisionPipeline {
 	public Mat hsvThresholdOutput() {
 		return hsvThresholdOutput;
 	}
-	
+
 	public Mat overlayOutput() {
 		return overlayOutput;
 	}
@@ -245,5 +247,5 @@ public class OurVisionPipeline implements VisionPipeline {
 			}
 		}
 	}
-	
+
 }

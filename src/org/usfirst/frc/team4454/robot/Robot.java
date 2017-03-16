@@ -53,8 +53,6 @@ public class Robot extends IterativeRobot {
 	Servo intakeFeed;
 	Servo GearOne;
 	Servo GearTwo;
-
-
 	
 	Victor intakeLED;
 
@@ -90,10 +88,9 @@ public class Robot extends IterativeRobot {
 	UsbCamera intakeCamera;
 	VisionThread shooterVisionThread;
 	VisionThread intakeVisionThread;
-	VisionThread testVisionThread;
+	
 	CvSource shooterOutputStream;
 	CvSource intakeOutputStream;
-	CvSource testOutputStream;
 	
 	int exposureValue = 10;
 	boolean exposureChanged = false;
@@ -236,17 +233,8 @@ public class Robot extends IterativeRobot {
 
 		shooterOutputStream = CameraServer.getInstance().putVideo("shooterOverlay", 320, 240);
 		intakeOutputStream = CameraServer.getInstance().putVideo("intakeOverlay", 320, 240);
-		testOutputStream = CameraServer.getInstance().putVideo("testOverlay", 320, 240);
 		
-		shooterVisionThread = new VisionThread(shooterCamera, new LineVisionPipeline(),
-				pipeline->{
-					pipeline.g = 0;
-					pipeline.b = 255;
-					pipeline.r = 0;
-					pipeline.width = 2;
-					shooterOutputStream.putFrame(pipeline.lineOutput());
-				});
-
+		/****
 		intakeVisionThread = new VisionThread(intakeCamera, new LineVisionPipeline(),
 				pipeline->{
 					pipeline.g = 0;
@@ -255,13 +243,16 @@ public class Robot extends IterativeRobot {
 					pipeline.width = 2;
 					intakeOutputStream.putFrame(pipeline.lineOutput());
 				});
+		****/
 
-		testVisionThread = new VisionThread(intakeCamera, new OurVisionPipeline(),
+		intakeVisionThread = new VisionThread(intakeCamera, new OurVisionPipeline(),
 				pipeline->{
-					testOutputStream.putFrame(pipeline.overlayOutput());
+					intakeOutputStream.putFrame(pipeline.overlayOutput());
 
 					if (pipeline.foundTarget) {
 						targetDistance = pipeline.targetDistance;
+					} else {
+						targetDistance = -1.0;
 					}
 					
 					if (exposureChanged) {
@@ -277,10 +268,28 @@ public class Robot extends IterativeRobot {
 
 					pipeline.hsvThresholdValue[0] = valMin;
 					pipeline.hsvThresholdValue[1] = valMax;
-
 				});
 		
-		testVisionThread.start();
+
+		shooterVisionThread = new VisionThread(shooterCamera, new ShooterVisionPipeline(),
+				pipeline->{
+					shooterOutputStream.putFrame(pipeline.hsvThresholdOutput());
+
+					if (exposureChanged) {
+						shooterCamera.setExposureManual(exposureValue);
+						exposureChanged = false;						
+					}
+
+					pipeline.hsvThresholdHue[0] = hueMin;
+					pipeline.hsvThresholdHue[1] = hueMax;
+
+					pipeline.hsvThresholdSaturation[0] = satMin;
+					pipeline.hsvThresholdSaturation[1] = satMax;
+
+					pipeline.hsvThresholdValue[0] = valMin;
+					pipeline.hsvThresholdValue[1] = valMax;
+				});
+		
 		shooterVisionThread.start();
 		intakeVisionThread.start();
 
@@ -435,7 +444,7 @@ public class Robot extends IterativeRobot {
 		case 2: // Auton Drive Straight Mode
 			// AutonDriveStraight (0.4, autonDistance);
 			// Distance Parameters need to be recomputed
-			AutonSideGear (0.5, 0.5, 0.16, 60, 1.2, 5.0);
+			AutonSideGear (0.5, 0.5, 0.75, 60, 1.2, 5.0);
 			break;
 		}
 		
@@ -447,6 +456,7 @@ public class Robot extends IterativeRobot {
 		
 		SmartDashboard.putNumber ("currentAutonStage", currentAutonStage);
 		SmartDashboard.putString ("currentAutonMode", currentAutonMode.toString());
+		
 		report();
 
 	}
@@ -531,54 +541,6 @@ public class Robot extends IterativeRobot {
 		// OpenServo and let fly
 	}
 
-    
-	public void AutonHopper (double power, int placement) {
-		
-	}
-	
-	public void AutonGear (double power, double distance, int placement) {
-		// This may run into some issues sadly because of how the function is being run but we can deal with them later.
-		switch (currentAutonMode) {
-		case START: 
-			setGear(false);
-			currentAutonMode = AutonMode.MOVE_TO_GEAR;
-			break;
-		case MOVE_TO_GEAR:
-			if (placement == 0) {
-				// Could not find value for auton placement.
-				return;
-			}
-			
-			if (placement == 1) {
-				
-			}
-			
-			if (placement == 2) {
-				AutonDriveStraight(power, distance); // Go to target distance
-			}
-			
-			if (placement == 3) {
-				
-			} else {
-				return;
-			}
-			currentAutonMode = AutonMode.RELEASE_GEAR;
-			break;
-		case RELEASE_GEAR:
-			setGear(true);
-			currentAutonMode = AutonMode.BACK_UP;
-			break;
-		case BACK_UP:
-			// We may need some sort of a delay
-			AutonDriveStraight(-power, autonDistance); // Back up may need to go slower that going forward.
-			setGear(false);
-			// Auton Shoot?
-		default:
-			break;
-		}
-		
-	}	
-	
 	public void AutonShoot (double RPM, double shootTime) {
 		
 		if (shootTime <= 0) {

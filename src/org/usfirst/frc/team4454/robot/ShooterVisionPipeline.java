@@ -18,24 +18,26 @@ public class ShooterVisionPipeline implements VisionPipeline {
 
 	double filterContoursMinArea = 40.0;
 	double filterContoursMinPerimeter = 0;
-	double filterContoursMinWidth = 10;
+	double filterContoursMinWidth = 5;
 	double filterContoursMaxWidth = 1000;
-	double filterContoursMinHeight = 10;
+	double filterContoursMinHeight = 5;
 	double filterContoursMaxHeight = 1000;
 	double[] filterContoursSolidity = {0, 100};
 	double filterContoursMaxVertices = 1000000;
 	double filterContoursMinVertices = 0;
-	double filterContoursMinRatio = 0.3;
-	double filterContoursMaxRatio = 0.5;
+	double filterContoursMinRatio = 3.0;
+	double filterContoursMaxRatio = 10.0;
 
-	//Outputs
-	private Mat overlayOutput, hsvThresholdOutput;
+	// Outputs
+	// This needs to be initialized or hsvThreshold fails with a null pointer exception/
+	private Mat hsvThresholdOutput = new Mat(); 
+	private Mat overlayOutput;
 	private ArrayList<MatOfPoint> findContoursOutput = new ArrayList<MatOfPoint>();
 	private ArrayList<MatOfPoint> filterContoursOutput = new ArrayList<MatOfPoint>();
 
 	public boolean foundTarget = false; // indicate whether you found the target
 	int targetTop, targetBottom, targetLeft, targetRight, targetHeight, targetWidth;
-	
+
 	double targetDistance;
 
 
@@ -49,7 +51,7 @@ public class ShooterVisionPipeline implements VisionPipeline {
 	public void process(Mat source0) {
 		// Step HSV_Threshold0:
 		Mat hsvThresholdInput = source0;
-		
+
 		overlayOutput = source0;
 
 		hsvThreshold(hsvThresholdInput, hsvThresholdHue, hsvThresholdSaturation, hsvThresholdValue, hsvThresholdOutput);
@@ -191,52 +193,49 @@ public class ShooterVisionPipeline implements VisionPipeline {
 		}
 	}
 
-    private void findTarget (List<MatOfPoint> inputContours) {
-	int n = inputContours.size();
-	int i, j;
-	Rect r1, r2;
-	double temp, aspectRatio;
+	private void findTarget (List<MatOfPoint> inputContours) {
+		int n = inputContours.size();
+		int i, j;
+		Rect r1, r2;
+		double temp, aspectRatio;
 
-	foundTarget = false;
+		foundTarget = false;
 
-	if (n >= 2) {
-	    for (i = 0; i < n; ++i) {
-		r1 = Imgproc.boundingRect(inputContours.get(i));
+		if (n >= 2) {
+			for (i = 0; i < n; ++i) {
+				r1 = Imgproc.boundingRect(inputContours.get(i));
 
-		for (j = 0; j < n; ++j) {
-		    r2 = Imgproc.boundingRect(inputContours.get(j));
+				for (j = 0; j < n; ++j) {
+					r2 = Imgproc.boundingRect(inputContours.get(j));
 
-					
-		    // compute y center of r2 relative to r1
-		    temp = (r2.y + 0.5*r2.height) - r1.y;
+					// compute x center of r2 relative to r1
+					temp = (r2.x + 0.5*r2.width) - r1.x;
 
-		    if ( (temp >= 0.0) && (temp <= r1.height) ) {
+					if ( (temp >= 0.0) && (temp <= r1.width) ) {
 
-			targetTop    = Math.min(r1.y, r2.y);
-			targetBottom = Math.max(r1.y+r1.height, r2.y+r2.height);
+						targetTop    = Math.min(r1.y, r2.y);
+						targetBottom = Math.max(r1.y+r1.height, r2.y+r2.height);
 
-			targetLeft  = Math.min(r1.x, r2.x);
-			targetRight = Math.max(r1.x+r1.width, r2.x+r2.width);
-					
-			targetHeight = targetBottom - targetTop;
-			targetWidth  = targetRight - targetLeft;
+						targetLeft  = Math.min(r1.x, r2.x);
+						targetRight = Math.max(r1.x+r1.width, r2.x+r2.width);
 
-			aspectRatio = (double)targetHeight / (double)targetWidth;
+						targetHeight = targetBottom - targetTop;
+						targetWidth  = targetRight - targetLeft;
 
-			targetDistance = 4 * 4 * 240 / (2 * targetHeight); // rough distance in inches (+/- 4)
+						aspectRatio = (double)targetHeight / (double)targetWidth;
 
-			if (Math.abs(aspectRatio - (5.0/10.25)) < 0.1) {
-			    foundTarget = true;
+						if (Math.abs(aspectRatio - (10/15)) < 0.5) {
+							foundTarget = true;
 
-			    Imgproc.rectangle(hsvThresholdOutput, 
-					      new Point(targetLeft, targetTop), 
-					      new Point(targetRight, targetBottom), 
-					      new Scalar(255, 0, 0));
-			    return;
+							Imgproc.rectangle(hsvThresholdOutput, 
+									new Point(targetLeft, targetTop), 
+									new Point(targetRight, targetBottom), 
+									new Scalar(0, 0, 255));
+							return;
+						}
+					}
+				}
 			}
-		    }
 		}
-	    }
 	}
-    }
 }
