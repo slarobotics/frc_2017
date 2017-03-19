@@ -117,10 +117,18 @@ public class Robot extends IterativeRobot {
 	public int currentAutonStage = 0;
 	public long startTime; // Used to measure elapsed time
 	
-	double autonDistance = 2.4;
+	// double autonDistance = 2.4;
 	double autonShootTime = 5.0;
+	
+	double autonD1 = 2.4;
+	double autonTurnAngle = 60;
+	double autonD2 = 0.6;
+	int autonDropGear = 1;
 
 	double shooterRPM = SHOOTER_RPM_PRE_AUTON;
+	
+	// gear handler height
+	double gearHeight = 0.55;
 
 	public Robot() {
 		// The code below sets up the Joysticks and talons for the drivetrain.
@@ -234,17 +242,26 @@ public class Robot extends IterativeRobot {
 		shooterOutputStream = CameraServer.getInstance().putVideo("shooterOverlay", 320, 240);
 		intakeOutputStream = CameraServer.getInstance().putVideo("intakeOverlay", 320, 240);
 		
-		/****
-		intakeVisionThread = new VisionThread(intakeCamera, new LineVisionPipeline(),
+
+		shooterVisionThread = new VisionThread(shooterCamera, new LineVisionPipeline(),
 				pipeline->{
 					pipeline.g = 0;
 					pipeline.b = 0;
 					pipeline.r = 255;
 					pipeline.width = 2;
+					shooterOutputStream.putFrame(pipeline.lineOutput());
+				});
+
+		intakeVisionThread = new VisionThread(intakeCamera, new LineVisionPipeline(),
+				pipeline->{
+					pipeline.g = 0;
+					pipeline.b = 255;
+					pipeline.r = 0;
+					pipeline.width = 2;
 					intakeOutputStream.putFrame(pipeline.lineOutput());
 				});
-		****/
 
+		/***
 		intakeVisionThread = new VisionThread(intakeCamera, new OurVisionPipeline(),
 				pipeline->{
 					intakeOutputStream.putFrame(pipeline.overlayOutput());
@@ -269,11 +286,11 @@ public class Robot extends IterativeRobot {
 					pipeline.hsvThresholdValue[0] = valMin;
 					pipeline.hsvThresholdValue[1] = valMax;
 				});
-		
-
+		***/
+		/***
 		shooterVisionThread = new VisionThread(shooterCamera, new ShooterVisionPipeline(),
 				pipeline->{
-					shooterOutputStream.putFrame(pipeline.hsvThresholdOutput());
+					shooterOutputStream.putFrame(pipeline.overlayOutput());
 
 					if (exposureChanged) {
 						shooterCamera.setExposureManual(exposureValue);
@@ -289,8 +306,10 @@ public class Robot extends IterativeRobot {
 					pipeline.hsvThresholdValue[0] = valMin;
 					pipeline.hsvThresholdValue[1] = valMax;
 				});
+		***/
 		
 		shooterVisionThread.start();
+		
 		intakeVisionThread.start();
 
 		SmartDashboard.putNumber("Exposure", exposureValue);
@@ -309,10 +328,16 @@ public class Robot extends IterativeRobot {
 		
 		// Set auton parameters on smart dashboard
 		reportShooters();
-		SmartDashboard.putNumber("autonDistance", autonDistance);
+		// SmartDashboard.putNumber("autonDistance", autonDistance);
 		SmartDashboard.putNumber("autonShootTime", autonShootTime);
-		
+
+		SmartDashboard.putNumber("autonD1", autonD1);
+		SmartDashboard.putNumber("autonTurnAngle", autonTurnAngle);
+		SmartDashboard.putNumber("autonD2", autonD2);
+		SmartDashboard.putNumber("autonDropGear", autonDropGear);
+
 		openServo(false);
+		gearServo(false);
 	}
 	
 	// TELEOP MODE
@@ -324,6 +349,9 @@ public class Robot extends IterativeRobot {
 		shooterCamera.setExposureAuto();
 		
 		shooterRPM = SHOOTER_RPM_PRE_TELEOP;
+		
+		openServo(false);
+		gearServo(false);
 	}
 
 
@@ -349,6 +377,9 @@ public class Robot extends IterativeRobot {
 		
 		// intake servo enable/disable
 		openServo(operatorStick.getRawAxis(2) > 0.15);
+		
+		// gear mech servo enable/disable
+		gearServo(operatorStick.getRawButton(4)); // Y button
 		
 		intakeLED.set(0.05);
 		
@@ -401,6 +432,16 @@ public class Robot extends IterativeRobot {
 		}
 	}
 	
+	public void gearServo(boolean open) {
+		if(open) {
+			GearOne.set(0.45);
+			GearTwo.set(0.85);
+		} else {
+			GearOne.set(0.45 + gearHeight); //1.0 - heightAdjust);
+			GearTwo.set(0.85 - gearHeight);
+		}
+	}
+	
 	public double getDrivePowerScale() {
 		double scale = 0.65;
 
@@ -428,10 +469,18 @@ public class Robot extends IterativeRobot {
 		shooterRPM = SmartDashboard.getNumber("shooterRPM", shooterRPM);
 		
 		// Read auton distance +ve or -ve if 0 not movement
-		autonDistance = SmartDashboard.getNumber("autonDistance", autonDistance);
+		// autonDistance = SmartDashboard.getNumber("autonDistance", autonDistance);
 		
 		// Set shoot time in seconds if <= 0 no shot
 		autonShootTime = SmartDashboard.getNumber("autonShootTime", autonShootTime);
+		
+		autonD1 = SmartDashboard.getNumber("autonD1", autonD1);
+		autonTurnAngle = SmartDashboard.getNumber("autonTurnAngle", autonTurnAngle);
+		autonD2 = SmartDashboard.getNumber("autonD2", autonD2);
+		autonDropGear = (int) SmartDashboard.getNumber("autonDropGear", autonDropGear);
+		
+		openServo(false);
+		gearServo(false);
 	}
 	
 
@@ -444,7 +493,7 @@ public class Robot extends IterativeRobot {
 		case 2: // Auton Drive Straight Mode
 			// AutonDriveStraight (0.4, autonDistance);
 			// Distance Parameters need to be recomputed
-			AutonSideGear (0.5, 0.5, 0.75, 60, 1.2, 5.0);
+			AutonSideGear (0.35, 0.35, autonD1, autonTurnAngle, autonD2, 5.0);
 			break;
 		}
 		
@@ -481,7 +530,7 @@ public class Robot extends IterativeRobot {
 			break;
 		case DRIVE_STRAIGHT:
 			driveStraight(Math.signum(d1) * Math.abs(forward_power));
-			if (Math.abs(encRight.getDistance()) > Math.abs(d1)) {
+			if ((d1 == 0.0) || (Math.abs(getEncoderDistance()) > Math.abs(d1))) {
 				driveStraight(0.0);
 				resetDistanceAndYaw();
 				currentAutonMode = AutonMode.TURN;
@@ -490,7 +539,7 @@ public class Robot extends IterativeRobot {
 		case TURN:
 			temp = Math.signum(turn_angle) * turn_power;
 			setDriveMotors(temp, -temp);
-			if (Math.abs(ahrs.getAngle()) > Math.abs(turn_angle)) {
+			if ((turn_angle == 0.0) || (Math.abs(ahrs.getAngle()) > Math.abs(turn_angle))) {
 				setDriveMotors(0.0, 0.0);
 				resetDistanceAndYaw();
 				resetTimer();
@@ -500,7 +549,7 @@ public class Robot extends IterativeRobot {
 		case MOVE_TO_GEAR:
 			driveStraight(Math.signum(d2) * Math.abs(forward_power));
 			// Note that we check the timeout to handle situations where you drive into the airship
-			if  ( (Math.abs(encRight.getDistance()) > Math.abs(d2)) || (elapsedTime() > timeout) ) {
+			if  ((d2 == 0.0) || (Math.abs(getEncoderDistance()) > Math.abs(d2)) || (elapsedTime() > timeout) ) {
 				driveStraight(0.0);
 				resetDistanceAndYaw();
 				resetTimer();
@@ -508,15 +557,20 @@ public class Robot extends IterativeRobot {
 			}
 			break;
 		case RELEASE_GEAR:
-			setGear(true);
-			if (elapsedTime() > 0.5) {
+			if (autonDropGear > 0) {
+				gearServo(true);
+			} else {
+				currentAutonMode = AutonMode.STOP;
+			}
+			
+			if (elapsedTime() > 2.0) {
 				resetDistanceAndYaw();
 				currentAutonMode = AutonMode.BACK_UP;
 			}
 			break;
 		case BACK_UP:
 			driveStraight(-1.0 * Math.abs(forward_power));
-			if (Math.abs(encRight.getDistance()) > 1.0) {
+			if (Math.abs(getEncoderDistance()) > 1.0) {
 				driveStraight(0.0);
 				resetDistanceAndYaw();
 				currentAutonMode = AutonMode.STOP;
@@ -526,10 +580,14 @@ public class Robot extends IterativeRobot {
 			break;
 		}
 	}
+	
+	public double getEncoderDistance () {
+		// Factor of 0.9 to account for travel on carpet
+		return (0.9 * encRight.getDistance());
+	}
 
-	public void AutonCenterGear (double d1, double d2, double forward_power, double timeout) {
+	public void AutonCenterGear (double forward_power, double d2, double timeout) {
 		// START
-		// Go straight for d1
 		// Go straight for d2 or until timeout
 		// Drop gear
 		// Wait for one second
@@ -539,17 +597,8 @@ public class Robot extends IterativeRobot {
 		switch (currentAutonMode) {
 		case START:
 			resetDistanceAndYaw();
-			currentAutonMode = AutonMode.DRIVE_STRAIGHT;
+			currentAutonMode = AutonMode.MOVE_TO_GEAR;
 			break;
-		case DRIVE_STRAIGHT:
-			driveStraight(Math.signum(d1) * Math.abs(forward_power));
-			if (Math.abs(encRight.getDistance()) > Math.abs(d1)) {
-				driveStraight(0.0);
-				resetDistanceAndYaw();
-				currentAutonMode = AutonMode.MOVE_TO_GEAR;
-			}
-			break;
-			
 		case MOVE_TO_GEAR:
 			driveStraight(Math.signum(d2) * Math.abs(forward_power));
 			// Note that we check the timeout to handle situations where you drive into the airship
@@ -561,8 +610,8 @@ public class Robot extends IterativeRobot {
 			}
 			break;
 		case RELEASE_GEAR:
-			setGear(true);
-			if (elapsedTime() > 0.5) {
+			gearServo(true);
+			if (elapsedTime() > 1.0) {
 				resetDistanceAndYaw();
 				currentAutonMode = AutonMode.BACK_UP;
 			}
@@ -640,7 +689,7 @@ public class Robot extends IterativeRobot {
 			break;
 		case DRIVE_STRAIGHT :
 			driveStraight(Math.signum(distance) * Math.abs(power));
-			if (Math.abs(encRight.getDistance()) > Math.abs(distance)) {
+			if (Math.abs(getEncoderDistance()) > Math.abs(distance)) {
 				driveStraight(0.0);
 				currentAutonMode = AutonMode.STOP;
 			}
@@ -667,16 +716,6 @@ public class Robot extends IterativeRobot {
 	}
 
 	// UTILITY METHODS
-	
-	public void setGear (boolean open) {
-		if (open) {
-			GearOne.set(0.0);
-			GearTwo.set(0.0);
-		} else {
-			GearOne.set(0.5);
-			GearTwo.set(0.5);
-		}
-	}
 
 	public void setDriveMotors(double l, double r) {
 		frontRight.set(r);
@@ -707,7 +746,7 @@ public class Robot extends IterativeRobot {
 		++shooterRPMIter;
 	}
 	
-	public void adaptiveDrive(double l, double r){
+	public void adaptiveDrive(double l, double r) {
 
 		// alpha is a parameter between 0 and 1
 		final double alpha = 0.5;
@@ -795,12 +834,20 @@ public class Robot extends IterativeRobot {
 		SmartDashboard.putNumber("Power", power);
 	}
 
+	public void reportAndUpdateGearHeight() {
+		double gh = SmartDashboard.getNumber("GearHeight", gearHeight);
+		if(!compareDoubles(gh, gearHeight)) {
+			gearHeight = gh;
+		}
+		SmartDashboard.putNumber("GearHeight", gearHeight);
+	}
 	public void report() {
 		reportShooters();
 		// reportAhrs();
 		updateEncoders();
 		reportEncoders();
 		reportPower();
+		reportAndUpdateGearHeight();
 		SmartDashboard.putNumber("Target Distance", targetDistance); 
 	}
 

@@ -204,6 +204,12 @@ public class ShooterVisionPipeline implements VisionPipeline {
 		if (n >= 2) {
 			for (i = 0; i < n; ++i) {
 				r1 = Imgproc.boundingRect(inputContours.get(i));
+				
+				Imgproc.rectangle(overlayOutput, 
+						new Point(r1.x, r1.y), 
+						new Point(r1.x + r1.width, r1.y + r1.height), 
+						new Scalar(0, 0, 255));
+				
 
 				for (j = 0; j < n; ++j) {
 					r2 = Imgproc.boundingRect(inputContours.get(j));
@@ -211,7 +217,7 @@ public class ShooterVisionPipeline implements VisionPipeline {
 					// compute x center of r2 relative to r1
 					temp = (r2.x + 0.5*r2.width) - r1.x;
 
-					if ( (temp >= 0.0) && (temp <= r1.width) ) {
+					if ( (r2.y > (r1.y + r1.height)) && (temp >= 0.0) && (temp <= r1.width) ) {
 
 						targetTop    = Math.min(r1.y, r2.y);
 						targetBottom = Math.max(r1.y+r1.height, r2.y+r2.height);
@@ -222,15 +228,16 @@ public class ShooterVisionPipeline implements VisionPipeline {
 						targetHeight = targetBottom - targetTop;
 						targetWidth  = targetRight - targetLeft;
 
-						aspectRatio = (double)targetHeight / (double)targetWidth;
+						aspectRatio = ((double) targetHeight) / ((double) targetWidth);
 
-						if (Math.abs(aspectRatio - (10/15)) < 0.5) {
+						if (Math.abs(aspectRatio - (10/15)) < 1.0) {
 							foundTarget = true;
 
-							Imgproc.rectangle(hsvThresholdOutput, 
+							Imgproc.rectangle(overlayOutput, 
 									new Point(targetLeft, targetTop), 
 									new Point(targetRight, targetBottom), 
-									new Scalar(0, 0, 255));
+									new Scalar(100, 0, 255));
+							
 							return;
 						}
 					}
